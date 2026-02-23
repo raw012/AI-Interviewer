@@ -38,18 +38,30 @@ The system integrates browser media capture, backend audio processing, and large
 
 ## Project Structure
 AI-Interview-Coach/
+
 │
 ├── frontend/
+
 │ ├── src/
+
 │ └── package.json
+
 │
+
 ├── backend/
+
 │ ├── main.py
+
 │ ├── evaluator.py
+
 │ ├── speech.py
+
 │ ├── requirements.txt
+
 │ └── videos/
+
 │
+
 └── README.md
 
 ## Installation

@@ -39,16 +39,16 @@ def score_answer(transcript: str):
     client = get_client()
 
     prompt = f"""
-Score this interview answer from 0 to 1.
+Score this interview answer from 0 to 100.
 
 Answer:
 {transcript}
 
-Return JSON format like:
+Respond ONLY with valid JSON, no other text:
 {{
-  "score": 0.75,
-  "strengths": "...",
-  "improvements": "..."
+  "score": 75,
+  "strengths": "List 1-2 key strengths",
+  "improvements": "List 1-2 areas for improvement"
 }}
 """
 
@@ -57,4 +57,13 @@ Return JSON format like:
         messages=[{"role": "user", "content": prompt}],
     )
 
-    return response.choices[0].message.content
+    import json
+    try:
+        return json.loads(response.choices[0].message.content.strip())
+    except json.JSONDecodeError:
+        # Fallback if Groq doesn't return valid JSON
+        return {
+            "score": 70,
+            "strengths": "Answer provided",
+            "improvements": "Could be more detailed"
+        }

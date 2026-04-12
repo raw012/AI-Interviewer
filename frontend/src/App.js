@@ -22,6 +22,23 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState("");
   const [summaryData, setSummaryData] = useState(null);
+  const [playbackData, setPlaybackData] = useState(null);
+  const [currentPlaybackQuestion, setCurrentPlaybackQuestion] = useState(null);
+  const [dynamicCountdown, setDynamicCountdown] = useState(5);
+
+  // ================= PLAYBACK =================
+  const startPlayback = async (sessionId, questionNumber) => {
+    try {
+      const res = await fetch(`http://localhost:8000/playback/${sessionId}/${questionNumber}`);
+      if (!res.ok) throw new Error("Failed to load playback data");
+      const data = await res.json();
+      setPlaybackData(data);
+      setCurrentPlaybackQuestion(questionNumber);
+      setPage("playback");
+    } catch (err) {
+      alert(`Error loading playback: ${err.message}`);
+    }
+  };
 
   // ================= CAMERA SETUP =================
   useEffect(() => {
@@ -79,7 +96,9 @@ function App() {
       setQuestionNum(data.question_number);
       setTotalQuestions(data.total_questions);
       setTimeLeft(120);
-      setCountdown(5);
+      const newCountdown = calculateCountdown(data.question);
+      setDynamicCountdown(newCountdown);
+      setCountdown(newCountdown);
       setLiveTranscript("");
       setPage("question");
     } catch (err) {
@@ -139,7 +158,9 @@ function App() {
           setQuestion(data.next_question);
           setQuestionNum(data.question_number);
           setTimeLeft(120);
-          setCountdown(5);
+          const newCountdown = calculateCountdown(data.next_question);
+          setDynamicCountdown(newCountdown);
+          setCountdown(newCountdown);
           setLiveTranscript("");
           setPage("question");
         }
@@ -162,17 +183,33 @@ function App() {
   };
 
   // ================= TIMERS =================
+  // Calculate dynamic countdown based on question length
+  const calculateCountdown = (questionText) => {
+    // Formula: max(3, length × 0.05), capped at 15
+    if (!questionText) return 5;
+    const calculated = Math.max(3, Math.ceil(questionText.length * 0.05));
+    return Math.min(calculated, 15);
+  };
+
+  useEffect(() => {
+    if (page === "question" && question) {
+      // Calculate and set the dynamic countdown based on question length
+      const newCountdown = calculateCountdown(question);
+      setDynamicCountdown(newCountdown);
+      setCountdown(newCountdown);
+    }
+  }, [question, page]);
+
   useEffect(() => {
     if (page !== "question") return;
-    setCountdown(5);
     const timer = setInterval(() => {
       setCountdown((prev) => {
-        if (prev <= 1) { clearInterval(timer); setPage("recording"); startRecording(); return 5; }
+        if (prev <= 1) { clearInterval(timer); setPage("recording"); startRecording(); return dynamicCountdown; }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [page]);
+  }, [page, dynamicCountdown]);
 
   useEffect(() => {
     if (!recording || isProcessing) return;
@@ -228,23 +265,7 @@ function App() {
                 <select className="form-select" value={numQuestions} onChange={(e) => setNumQuestions(parseInt(e.target.value))}>
                   {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                     <option key={n} value={n}>{n} questions (~{n * 3} min)</option>
-                  ))}
-                </select>
-              </div>
-              <button className={`btn-primary${isProcessing ? " btn-loading" : ""}`} onClick={startInterview} disabled={isProcessing}>
-                {isProcessing ? <><span className="spinner" /> Preparing...</> : "Start Interview →"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ── QUESTION PREVIEW PAGE ──
-  if (page === "question") {
-    const circumference = 2 * Math.PI * 36;
-    const pct = countdown / 5;
+                  ))}dynamicCountdown;
     return (
       <div className="fullpage-center page-bg">
         <nav className="navbar">
@@ -270,6 +291,7 @@ function App() {
             <div className="countdown-num">{countdown}</div>
           </div>
           <p className="countdown-hint">Recording starts automatically in {countdown} second{countdown !== 1 ? "s" : ""}</p>
+          <p className="countdown-tip" style={{fontSize: "12px", color: "#999", marginTop: "12px"}}>Countdown time adapts to question length (3-15 seconds)</p>
         </div>
       </div>
     );
@@ -363,7 +385,7 @@ function App() {
                 </tr>
               </thead>
               <tbody>
-                {summaryData.interview_history.map((item, idx) => (
+                {summaryDatbutton className="video-link-btn" onClick={() => startPlayback(sessionId, item.question_number)}>Watch</button
                   <tr key={idx}>
                     <td>{item.question_number}</td>
                     <td><div className="cell-scroll">{item.question}</div></td>
@@ -381,6 +403,66 @@ function App() {
                         : <span className="no-video">—</span>}
                     </td>
                   </tr>
+  // ── PLAYBACK PAGE ──
+  if (page === "playback" && playbackData) {
+    return (
+      <div className="page-bg">
+        <nav className="navbar">
+          <div className="navbar-logo">
+            <div className="logo-icon">AI</div>
+            <span className="logo-text">Interview Coach</span>
+          </div>
+          <div className="progress-pill">Question {playbackData.question_number}</div>
+        </nav>
+        <div className="playback-container">
+          <div className="playback-video-wrap">
+            <video 
+              className="playback-video" 
+              controls 
+              autoPlay
+              src={playbackData.video_path}
+            />
+          </div>
+          <div className="playback-info">
+            <h2 className="playback-question">{playbackData.question}</h2>
+            <div className="playback-score">
+              <span className={`score-badge ${playbackData.evaluation.score >= 75 ? "score-good" : playbackData.evaluation.score >= 60 ? "score-mid" : "score-low-badge"}`}>
+                Score: {playbackData.evaluation.score}
+              </span>
+            </div>
+            <div className="playback-section">
+              <h3>Core Knowledge Points</h3>
+              <p>{playbackData.evaluation.key_concepts}</p>
+            </div>
+            <div className="playback-section">
+              <h3>Reference Answer Points</h3>
+              <p>{playbackData.evaluation.reference_answer}</p>
+            </div>
+            <div className="playback-section">
+              <h3>Strengths</h3>
+              <p>{playbackData.evaluation.strengths}</p>
+            </div>
+            <div className="playback-section">
+              <h3>Areas for Improvement</h3>
+              <p>{playbackData.evaluation.improvements}</p>
+            </div>
+            <div className="playback-section">
+              <h3>Improvement Suggestions</h3>
+              <p>{playbackData.evaluation.suggestions}</p>
+            </div>
+            <div className="playback-section">
+              <h3>Your Answer</h3>
+              <p className="transcript">{playbackData.transcript}</p>
+            </div>
+            <button className="btn-primary" onClick={() => setPage("results")}>
+              Back to Results
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
                 ))}
               </tbody>
             </table>

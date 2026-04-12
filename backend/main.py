@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uuid
 import os
 import json
+from datetime import datetime
 
 from speech import extract_audio, transcribe_audio
 
@@ -40,7 +41,8 @@ def start_interview(request: dict):
         "num_questions": num_questions,
         "current_question_index": 0,
         "is_intro_done": False,  # Track if introduction has been answered
-        "history": []  # List of {question, transcript, score, followup, video_path}
+        "history": [],  # List of {question, transcript, score, followup, video_path}
+        "question_videos": {}  # Map of question_number -> video_path for playback
     }
 
     # Always start with introduction
@@ -68,8 +70,11 @@ async def upload_answer(session_id: str, file: UploadFile = File(...)):
 
         session = sessions[session_id]
         os.makedirs("videos", exist_ok=True)
-
-        video_path = f"videos/{uuid.uuid4()}.webm"
+# Generate question ID for video filename based on question number
+        question_num = session["current_question_index"] + 1
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        video_filename = f"question_{question_num}_{timestamp}.webm"
+        video_path = os.path.join("videos", video_filename)
 
         with open(video_path, "wb") as f:
             f.write(await file.read())
@@ -90,14 +95,18 @@ async def upload_answer(session_id: str, file: UploadFile = File(...)):
             current_question = "Interview Question"
 
         # Store in history
-        session["history"].append({
-            "question_number": current_q_idx + 1,
+        history_entry = {
+            "question_number": question_num,
             "question": current_question,
             "transcript": transcript,
             "evaluation": evaluation,
             "video_path": video_path,
             "audio_path": audio_path
-        })
+        }
+        session["history"].append(history_entry)
+        
+        # Map question number to video path for playback
+        session["question_videos"][question_num] = video_path
 
         session["current_question_index"] += 1
 
@@ -176,17 +185,21 @@ def generate_new_question(job_desc: str, history: list, num_questions: int) -> s
             history_context += f"- {item['question']}\n"
     
     prompt = f"""
-You are an AI technical interviewer. Generate ONE new technical interview question.
+You are an AI technical interviewer. Generate ONE new interview question.
 This is question {previous_q_count + 1} out of {num_questions}.
 
 Job Description:
 {job_desc}
 {history_context}
 
-Ask a relevant technical question that:
-- Covers different aspects than previous questions
-- Assesses skills needed for the role
-- Is appropriately challenging
+IMPORTANT - Only ask VERBAL QUESTIONS, NO CODING:
+- Ask about concepts, experience, decisions, and examples only
+- NO coding challenges, LeetCode problems, or whiteboarding tasks
+- NO questions asking to write code, pseudo-code, or algorithms
+- NO "design a system" questions that require code
+- Keep it conversational - suitable for voice answers
+- Limit to 1-3 sentences maximum
+- Assess skills needed for the role through conversation
 
 Only output the question, nothing else.
 """
@@ -251,4 +264,36 @@ def get_interview_summary(session_id: str):
     except Exception as e:
         print(f"Error generating summary: {str(e)}")
         return {"error": f"Summary generation failed: {str(e)}"}, 500
-        return {"error": f"Processing failed: {str(e)}"}, 500
+
+
+@app.get("/playback/{session_id}/{question_number}")
+def get_question_playback(session_id: str, question_number: int):
+    """Get video playback data for a specific question"""
+    try:
+        if session_id not in sessions:
+            return {"error": "Invalid session ID"}, 400
+        
+        session = sessions[session_id]
+        
+        # Find the question in history
+        question_data = None
+        for h in session["history"]:
+            if h["question_number"] == question_number:
+                question_data = h
+                break
+        
+        if not question_data:
+            return {"error": f"Question {question_number} not found"}, 404
+        
+        # Return playback data
+        return {
+            "question_number": question_number,
+            "question": question_data["question"],
+            "transcript": question_data["transcript"],
+            "video_path": question_data["video_path"],
+            "evaluation": question_data["evaluation"]
+        }
+    
+    except Exception as e:
+        print(f"Error retrieving playback: {str(e)}")
+        return {"error": f"Playback retrieval failed: {str(e)}"}, 500

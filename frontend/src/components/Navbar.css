@@ -1,0 +1,105 @@
+/**
+ * Navbar Styles
+ */
+
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: white;
+  padding: 15px 30px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.navbar-brand a {
+  font-size: 18px;
+  font-weight: 700;
+  color: #667eea;
+  text-decoration: none;
+  margin: 0;
+}
+
+.navbar-brand a:hover {
+  opacity: 0.8;
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 25px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.username {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.plan-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.plan-badge.free {
+  background: #e8f0f9;
+  color: #2c5aa0;
+}
+
+.plan-badge.pro {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.quota-display {
+  font-size: 13px;
+  color: #999;
+  white-space: nowrap;
+}
+
+.logout-button {
+  padding: 8px 16px;
+  background: #f0f0f0;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.logout-button:hover {
+  background: #e0e0e0;
+  color: #000;
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    padding: 12px 15px;
+    gap: 15px;
+  }
+
+  .navbar-right {
+    gap: 15px;
+    font-size: 12px;
+  }
+
+  .navbar-brand a {
+    font-size: 16px;
+  }
+
+  .quota-display {
+    display: none;
+  }
+}

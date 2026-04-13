@@ -1,6 +1,5 @@
 """Interview session routes."""
 
-import json
 from typing import Optional, List
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File
@@ -11,6 +10,7 @@ from auth import get_current_user
 from database import get_db_session
 from models import User, InterviewSession, InterviewQA, InterviewStatusEnum
 from services.ai_gateway import call_llm
+from services.json_utils import clean_and_parse_json
 from services.stt_service import transcribe_audio
 from services.prompt_templates import (
     CODING_SYSTEM,
@@ -58,6 +58,8 @@ class StartInterviewResponse(BaseModel):
 class SubmitAnswerRequest(BaseModel):
     session_id: str
     question_id: str
+    question: str  # Include the actual question text
+    question_focus: str  # Include the focus text
     interview_type: str
     user_answer: str
     depth_layer: int
@@ -95,15 +97,8 @@ class SummaryResponse(BaseModel):
 # ============= HELPER FUNCTIONS =============
 
 async def _parse_json_response(text: str) -> dict:
-    """Extract JSON from LLM response, handling markdown code blocks."""
-    text = text.strip()
-    
-    # Remove markdown code blocks if present
-    if text.startswith("```"):
-        lines = text.split("\n")
-        text = "\n".join(lines[1:-1]) if len(lines) > 2 else text
-    
-    return json.loads(text)
+    """Extract JSON from LLM response, handling markdown code blocks and escape sequences."""
+    return clean_and_parse_json(text)
 
 
 async def _generate_first_question_for_type(
@@ -255,20 +250,10 @@ async def submit_answer(
     if not interview_session:
         raise HTTPException(status_code=404, detail="Interview session not found")
 
-    # Fetch the question being answered (find it from previous Q&As)
-    result = await db_session.execute(
-        select(InterviewQA).where(
-            (InterviewQA.id == request.question_id) & (InterviewQA.session_id == request.session_id)
-        )
-    )
-    previous_qa = result.scalars().first()
-    if not previous_qa:
-        raise HTTPException(status_code=404, detail="Question not found")
-
-    # Evaluate answer using LLM
+    # Evaluate answer using LLM (use question text from request)
     eval_prompt = evaluate_answer_prompt(
-        question=previous_qa.question,
-        question_focus=previous_qa.question_focus,
+        question=request.question,
+        question_focus=request.question_focus,
         user_answer=request.user_answer,
         interview_type=request.interview_type,
     )
@@ -280,8 +265,8 @@ async def submit_answer(
     qa_pair = InterviewQA(
         session_id=request.session_id,
         interview_type=request.interview_type,
-        question=previous_qa.question,
-        question_focus=previous_qa.question_focus,
+        question=request.question,
+        question_focus=request.question_focus,
         user_answer=request.user_answer,
         ai_feedback=eval_data.get("improvement", ""),
         score=int(eval_data.get("score", 0)),
@@ -290,13 +275,13 @@ async def submit_answer(
     db_session.add(qa_pair)
     await db_session.commit()
 
-    # Generate next question
+    # Generate next question for follow-ups (resume/behavioral only)
     next_question = None
     if request.depth_layer < 3 and request.interview_type in ["resume", "behavioral"]:
         # Generate follow-up (deeper layer)
         next_depth = request.depth_layer + 1
         conversation_history = [
-            (previous_qa.question, request.user_answer),
+            (request.question, request.user_answer),
         ]
 
         if request.interview_type == "resume":
@@ -322,7 +307,7 @@ async def submit_answer(
             depth_layer=next_depth,
         )
     elif request.interview_type not in ["resume", "behavioral"]:
-        # Generate next top-level question of different type
+        # For technical questions, generate next top-level question of different type
         remaining_types = [t for t in interview_session.interview_types if t != request.interview_type]
         if remaining_types:
             next_type = remaining_types[0]

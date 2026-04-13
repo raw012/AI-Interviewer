@@ -1,5 +1,6 @@
 import os
 from groq import Groq
+from services.json_utils import clean_and_parse_json
 
 def get_client():
     api_key = os.getenv("GROQ_API_KEY")
@@ -69,10 +70,9 @@ Be constructive and specific in your feedback.
         messages=[{"role": "user", "content": prompt}],
     )
 
-    import json
     try:
-        return json.loads(response.choices[0].message.content.strip())
-    except json.JSONDecodeError:
+        return clean_and_parse_json(response.choices[0].message.content.strip())
+    except (ValueError, Exception):
         # Fallback if Groq doesn't return valid JSON
         return {
             "score": 70,

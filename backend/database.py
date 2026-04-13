@@ -1,6 +1,8 @@
 """Async SQLAlchemy database configuration."""
 
 import os
+from dotenv import load_dotenv
+load_dotenv()
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker

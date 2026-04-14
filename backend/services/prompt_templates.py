@@ -174,6 +174,42 @@ EVAL_SYSTEM = """You are a technical interviewer evaluating a candidate's answer
 Be fair but critical. Always return valid JSON only."""
 
 
+def evaluate_coding_answer_prompt(question: str, user_code: str, language: str) -> str:
+    """Generate a strict coding answer evaluation prompt."""
+    return f"""
+You are a strict coding interview evaluator. Evaluate the following code submission.
+
+Problem: {question}
+Language: {language}
+Submitted code:
+{user_code}
+
+Evaluate on these four dimensions:
+1. Syntax correctness (0-25pts): Does the code have valid syntax for {language}?
+2. Logic correctness (0-25pts): Does the algorithm solve the problem correctly?
+3. Edge case handling (0-25pts): Does it handle empty input, null, duplicates, large values?
+4. Time/space complexity (0-25pts): Is the solution optimal or at least acceptable?
+
+IMPORTANT RULES:
+- If the code is empty or blank: return score 0 immediately, no partial credit
+- If the code has syntax errors: max score 10
+- If the code does not solve the problem: max score 40
+- Be strict. Do not give high scores for incomplete or wrong solutions.
+
+Return JSON only:
+{{
+  "score": <integer 0-100>,
+  "syntax": <integer 0-25>,
+  "logic": <integer 0-25>,
+  "edge_cases": <integer 0-25>,
+  "complexity": <integer 0-25>,
+  "strengths": "What the candidate did well (1-2 sentences, say 'No code submitted' if empty)",
+  "improvement": "Specific actionable feedback (2-3 sentences)",
+  "model_answer_hint": "Brief hint toward the correct approach"
+}}
+"""
+
+
 def evaluate_answer_prompt(question: str, question_focus: str, user_answer: str, interview_type: str) -> str:
     """Generate an answer evaluation prompt."""
     return f"""

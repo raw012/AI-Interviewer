@@ -25,6 +25,7 @@ from services.prompt_templates import (
     behavioral_first_question_prompt,
     behavioral_followup_prompt,
     evaluate_answer_prompt,
+    evaluate_coding_answer_prompt,
 )
 
 
@@ -250,13 +251,45 @@ async def submit_answer(
     if not interview_session:
         raise HTTPException(status_code=404, detail="Interview session not found")
 
-    # Evaluate answer using LLM (use question text from request)
-    eval_prompt = evaluate_answer_prompt(
-        question=request.question,
-        question_focus=request.question_focus,
-        user_answer=request.user_answer,
-        interview_type=request.interview_type,
-    )
+    # For coding interviews, check for empty/whitespace submissions
+    if request.interview_type == "coding":
+        if not request.user_answer.strip():
+            # Force score to 0 for empty submissions
+            qa_pair = InterviewQA(
+                session_id=request.session_id,
+                interview_type=request.interview_type,
+                question=request.question,
+                question_focus=request.question_focus,
+                user_answer=request.user_answer,
+                ai_feedback="No code submitted.",
+                score=0,
+                depth_layer=request.depth_layer,
+            )
+            db_session.add(qa_pair)
+            await db_session.commit()
+            
+            return SubmitAnswerResponse(
+                feedback="No code submitted.",
+                score=0,
+                next_question=None,
+            )
+
+    # Evaluate answer using LLM
+    if request.interview_type == "coding":
+        # Use strict coding evaluation
+        eval_prompt = evaluate_coding_answer_prompt(
+            question=request.question,
+            user_code=request.user_answer,
+            language="Python",  # Default language; could be parameterized
+        )
+    else:
+        # Use generic evaluation
+        eval_prompt = evaluate_answer_prompt(
+            question=request.question,
+            question_focus=request.question_focus,
+            user_answer=request.user_answer,
+            interview_type=request.interview_type,
+        )
     
     eval_response_text = await call_llm(eval_prompt, EVAL_SYSTEM, current_user.id, current_user.plan.value)
     eval_data = await _parse_json_response(eval_response_text)

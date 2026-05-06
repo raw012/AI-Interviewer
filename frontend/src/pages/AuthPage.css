@@ -1,5 +1,6 @@
 /**
- * Auth Page Styles
+ * Auth Page Styles - LinkedIn Design System
+ * Professional login and signup experience
  */
 
 .auth-page {
@@ -7,134 +8,363 @@
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-background);
+  font-family: var(--font-family);
+  padding: var(--spacing-md);
 }
 
 .auth-container {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  padding: 40px;
+  background: var(--color-bg-white);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-xl);
   width: 100%;
   max-width: 420px;
 }
 
 .auth-container h1 {
-  margin: 0 0 10px 0;
-  font-size: 32px;
+  margin: 0 0 var(--spacing-sm) 0;
+  font-size: 28px;
   font-weight: 700;
-  color: #333;
+  color: var(--color-text-primary);
   text-align: center;
 }
 
 .auth-container .subtitle {
-  margin: 0 0 30px 0;
+  margin: 0 0 var(--spacing-lg) 0;
   font-size: 14px;
-  color: #666;
+  color: var(--color-text-secondary);
   text-align: center;
+  line-height: 1.5;
 }
 
+/* Auth Tabs */
 .auth-tabs {
   display: flex;
-  border-bottom: 2px solid #f0f0f0;
-  margin-bottom: 30px;
+  border-bottom: 2px solid var(--color-border);
+  margin-bottom: var(--spacing-lg);
   gap: 0;
 }
 
 .auth-tabs .tab {
   flex: 1;
-  padding: 15px;
+  padding: var(--spacing-md);
   border: none;
   background: none;
-  font-size: 16px;
-  font-weight: 500;
-  color: #999;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
   cursor: pointer;
   text-align: center;
   border-bottom: 3px solid transparent;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
+  font-family: var(--font-family);
 }
 
 .auth-tabs .tab:hover {
-  color: #667eea;
+  color: var(--color-text-primary);
 }
 
 .auth-tabs .tab.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
 }
 
+/* Error Message */
 .error-message {
-  background: #fee;
-  border: 1px solid #fcc;
-  color: #c33;
-  padding: 12px;
-  border-radius: 6px;
-  margin-bottom: 20px;
-  font-size: 14px;
+  background: #fef0f0;
+  border: 1px solid #f5d5d5;
+  color: var(--color-error);
+  padding: var(--spacing-md);
+  border-radius: 4px;
+  margin-bottom: var(--spacing-md);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
+/* Form Styles */
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-md);
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-xs);
 }
 
 .form-group label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .form-group input {
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
   font-size: 14px;
-  font-family: inherit;
-  transition: border-color 0.3s ease;
+  font-family: var(--font-family);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background: var(--color-bg-white);
+  color: var(--color-text-primary);
+}
+
+.form-group input::placeholder {
+  color: var(--color-text-secondary);
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--color-primary);
+  box-shadow: inset 0 1px 0 rgba(10, 102, 194, 0.15);
 }
 
-.submit-button {
-  padding: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.submit-button:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-}
-
-.submit-button:disabled {
-  opacity: 0.7;
+.form-group input:disabled {
+  background: var(--color-background);
+  color: var(--color-text-secondary);
   cursor: not-allowed;
 }
 
-@media (max-width: 480px) {
+/* Submit Button */
+.submit-button {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-family);
+  margin-top: var(--spacing-sm);
+}
+
+.submit-button:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.submit-button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.submit-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Social Login / OAuth Styling
+   ============================================================================ */
+
+/* Divider */
+.divider {
+  display: flex;
+  align-items: center;
+  margin: var(--spacing-md) 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.divider span {
+  padding: 0 var(--spacing-md);
+}
+
+/* Social Buttons Container */
+.social-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+/* Google Button Wrapper */
+.google-button-wrapper {
+  display: flex;
+  justify-content: center;
+}
+
+.google-button-wrapper > div {
+  width: 100%;
+}
+
+/* Social Button Base */
+.social-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg-white);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: var(--font-family);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 44px; /* Accessible touch target */
+  width: 100%;
+}
+
+.social-button:hover:not(:disabled) {
+  background: var(--color-background);
+  border-color: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.social-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.social-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background: var(--color-background);
+}
+
+.social-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Social Icon Styling */
+.social-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* Apple Button */
+.social-button.apple-button {
+  background: #000000;
+  border-color: #000000;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.social-button.apple-button:hover:not(:disabled) {
+  background: #1a1a1a;
+  border-color: #1a1a1a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.social-button.apple-button .social-icon {
+  color: #ffffff;
+}
+
+/* Facebook Button */
+.social-button.facebook-button {
+  background: #f0f2f5;
+  border-color: #ccc;
+  color: #0a66c2;
+}
+
+.social-button.facebook-button:hover:not(:disabled) {
+  background: #e4e6eb;
+  border-color: #8a8d91;
+}
+
+.social-button.facebook-button .social-icon {
+  color: #0a66c2;
+}
+
+/* Google Button (handled by @react-oauth/google component) */
+:global(.g_id_signin) {
+  width: 100% !important;
+}
+
+:global(.g_id_signin > div > button) {
+  width: 100%;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  height: 44px;
+}
+
+/* ============================================================================
+   Responsive - Tablet
+   ============================================================================ */
+
+@media (max-width: 1024px) {
   .auth-container {
-    padding: 30px 20px;
+    padding: var(--spacing-lg);
   }
 
   .auth-container h1 {
     font-size: 24px;
+  }
+}
+
+/* ============================================================================
+   Responsive - Mobile
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .auth-page {
+    padding: var(--spacing-md);
+    min-height: auto;
+  }
+
+  .auth-container {
+    padding: var(--spacing-lg);
+    max-width: 100%;
+  }
+
+  .auth-container h1 {
+    font-size: 22px;
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .auth-container .subtitle {
+    margin-bottom: var(--spacing-md);
+    font-size: 13px;
+  }
+
+  .auth-tabs .tab {
+    font-size: 13px;
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .form-group input {
+    font-size: 16px; /* Prevents mobile zoom-on-focus */
+  }
+
+  .social-button {
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 13px;
+    min-height: 40px;
+  }
+
+  .social-button span {
+    display: none;
+  }
+
+  .social-button .social-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .divider {
+    margin: var(--spacing-md) 0;
+  }
+
+  .divider span {
+    padding: 0 var(--spacing-sm);
+    font-size: 12px;
   }
 }

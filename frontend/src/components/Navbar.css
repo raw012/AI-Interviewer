@@ -1,98 +1,155 @@
 /**
- * Navbar Styles
+ * Navbar Styles - LinkedIn Design System
+ * Professional, minimal, responsive navigation
  */
 
 .navbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  background: white;
-  padding: 15px 30px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  margin-bottom: 20px;
+  background: var(--color-bg-white);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--spacing-md) var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-family);
 }
 
+.navbar-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Brand / Logo */
 .navbar-brand a {
   font-size: 18px;
   font-weight: 700;
-  color: #667eea;
+  color: var(--color-primary);
   text-decoration: none;
-  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  transition: opacity 0.2s ease;
 }
 
 .navbar-brand a:hover {
-  opacity: 0.8;
+  opacity: 0.85;
+  color: var(--color-primary-hover);
 }
 
+/* Hamburger Menu - Mobile Only */
+.hamburger-menu {
+  display: none;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 24px;
+  height: 18px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  gap: 4px;
+}
+
+.hamburger-menu span {
+  width: 100%;
+  height: 2px;
+  background: var(--color-text-primary);
+  border-radius: 1px;
+  transition: all 0.3s ease;
+  transform-origin: center;
+}
+
+.hamburger-menu:hover span {
+  background: var(--color-primary);
+}
+
+/* Right Navigation Items */
 .navbar-right {
   display: flex;
   align-items: center;
-  gap: 25px;
+  gap: var(--spacing-lg);
+  transition: all 0.3s ease;
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
 
 .username {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--color-text-primary);
+  white-space: nowrap;
 }
 
+/* Plan Badge */
 .plan-badge {
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
 .plan-badge.free {
   background: #e8f0f9;
-  color: #2c5aa0;
+  color: var(--color-primary);
 }
 
 .plan-badge.pro {
-  background: #fff3cd;
-  color: #856404;
+  background: #f0f0f0;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
 }
 
+/* Quota Display */
 .quota-display {
-  font-size: 13px;
-  color: #999;
+  font-size: 12px;
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
+/* Logout Button */
 .logout-button {
-  padding: 8px 16px;
-  background: #f0f0f0;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 13px;
   font-weight: 500;
-  color: #333;
+  color: var(--color-text-primary);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
+  font-family: var(--font-family);
+  white-space: nowrap;
 }
 
 .logout-button:hover {
-  background: #e0e0e0;
-  color: #000;
+  background: var(--color-background);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
-@media (max-width: 768px) {
+.logout-button:active {
+  background: #f0f0f0;
+  border-color: var(--color-primary);
+}
+
+/* Responsive - Tablet */
+@media (max-width: 1024px) {
   .navbar {
-    padding: 12px 15px;
-    gap: 15px;
+    padding: var(--spacing-sm) var(--spacing-md);
   }
 
   .navbar-right {
-    gap: 15px;
-    font-size: 12px;
+    gap: var(--spacing-md);
   }
 
   .navbar-brand a {
@@ -100,6 +157,88 @@
   }
 
   .quota-display {
-    display: none;
+    font-size: 11px;
+  }
+
+  .username {
+    font-size: 13px;
+  }
+}
+
+/* Responsive - Mobile */
+@media (max-width: 768px) {
+  .hamburger-menu {
+    display: flex;
+  }
+
+  .hamburger-menu.visible-mobile {
+    display: flex;
+  }
+
+  .navbar {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .navbar-container {
+    position: relative;
+  }
+
+  .navbar-brand a {
+    font-size: 15px;
+  }
+
+  /* Mobile Menu - Collapsed by default */
+  .navbar-right {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    gap: var(--spacing-md);
+    background: var(--color-bg-white);
+    border-bottom: 1px solid var(--color-border);
+    padding: var(--spacing-md);
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: all 0.3s ease;
+    margin-top: 0;
+  }
+
+  /* Mobile Menu - Expanded */
+  .navbar-right.mobile-open {
+    max-height: 300px;
+    opacity: 1;
+  }
+
+  .user-info {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .username {
+    font-size: 12px;
+  }
+
+  .quota-display {
+    font-size: 11px;
+    display: block;
+  }
+
+  .logout-button {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 12px;
+  }
+}
+
+/* Visibility utilities */
+.visible-mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .visible-mobile {
+    display: flex;
   }
 }

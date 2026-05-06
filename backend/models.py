@@ -58,6 +58,7 @@ class InterviewSession(Base):
     target_position: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)  # 15, 30, or 60
     user_comments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    domain: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # e.g., "Data Structures & Algorithms"
     status: Mapped[InterviewStatusEnum] = mapped_column(Enum(InterviewStatusEnum), default=InterviewStatusEnum.active, nullable=False)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

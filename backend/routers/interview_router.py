@@ -42,6 +42,7 @@ class StartInterviewRequest(BaseModel):
     target_position: Optional[str] = None
     duration_minutes: int = 30  # 15, 30, or 60; coding is always 30
     user_comments: Optional[str] = None
+    domain: Optional[str] = None  # Technical domain for technical interviews
 
 
 class QuestionResponse(BaseModel):
@@ -64,6 +65,16 @@ class SubmitAnswerRequest(BaseModel):
     interview_type: str
     user_answer: str
     depth_layer: int
+    domain: Optional[str] = None  # Domain selected by user
+
+
+class AnalyzeProfileRequest(BaseModel):
+    job_description: str
+    resume_text: str
+
+
+class AnalyzeProfileResponse(BaseModel):
+    domains: List[str]
 
 
 class SubmitAnswerResponse(BaseModel):
@@ -145,6 +156,7 @@ async def _generate_first_question_for_type(
             resume_text=session.resume_text or "No resume provided",
             job_description=session.job_description or "No JD provided",
             asked_topics=[],
+            domain=session.domain or "",
             user_comments=session.user_comments or "",
         )
         response_text = await call_llm(prompt, TECHNICAL_SYSTEM, llm_user_id, llm_user_plan)
@@ -175,6 +187,47 @@ async def _generate_first_question_for_type(
 
 # ============= ENDPOINTS =============
 
+@router.post("/analyze", response_model=AnalyzeProfileResponse)
+async def analyze_profile(
+    request: AnalyzeProfileRequest,
+    current_user: User = Depends(get_current_user),
+) -> AnalyzeProfileResponse:
+    """
+    Analyze job description and resume to suggest technical domains.
+    Uses Gemini LLM to extract 3-5 most relevant technical domains.
+    """
+    analyze_prompt = f"""
+Analyze the following job description and resume to identify the most relevant technical domains for a technical interview.
+
+Job Description:
+{request.job_description}
+
+Resume:
+{request.resume_text}
+
+Extract 3-5 most relevant technical domains that should be tested in an interview.
+Return valid JSON only:
+{{
+  "domains": ["Domain 1", "Domain 2", "Domain 3", "Domain 4", "Domain 5"]
+}}
+
+Examples of domains: "Data Structures & Algorithms", "System Design", "Operating Systems", "Databases", "Computer Networks", "Distributed Systems", "Concurrency & Threading", "Microservices", "Cloud Computing", etc.
+"""
+    
+    system_prompt = """You are an expert technical interviewer. Analyze job descriptions and resumes to identify the core technical domains that should be tested. Always return valid JSON only."""
+    
+    try:
+        response_text = await call_llm(analyze_prompt, system_prompt, current_user.id, current_user.plan.value)
+        data = await _parse_json_response(response_text)
+        domains = data.get("domains", [])
+        return AnalyzeProfileResponse(domains=domains)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to analyze profile: {str(e)}",
+        )
+
+
 @router.post("/start", response_model=StartInterviewResponse)
 async def start_interview(
     request: StartInterviewRequest,
@@ -201,6 +254,7 @@ async def start_interview(
         target_position=request.target_position,
         duration_minutes=request.duration_minutes,
         user_comments=request.user_comments,
+        domain=request.domain,
         status=InterviewStatusEnum.active,
     )
 
@@ -310,7 +364,7 @@ async def submit_answer(
 
     # Generate next question for follow-ups (resume/behavioral only)
     next_question = None
-    if request.depth_layer < 3 and request.interview_type in ["resume", "behavioral"]:
+    if request.depth_layer < 5 and request.interview_type in ["resume", "behavioral"]:
         # Generate follow-up (deeper layer)
         next_depth = request.depth_layer + 1
         conversation_history = [
@@ -322,6 +376,7 @@ async def submit_answer(
                 resume_text=interview_session.resume_text or "",
                 conversation_history=conversation_history,
                 depth_layer=next_depth,
+                domain=request.domain or "",
                 user_comments=interview_session.user_comments or "",
             )
             followup_response = await call_llm(followup_prompt, RESUME_SYSTEM, current_user.id, current_user.plan.value)
@@ -329,6 +384,7 @@ async def submit_answer(
             followup_prompt = behavioral_followup_prompt(
                 conversation_history=conversation_history,
                 depth_layer=next_depth,
+                domain=request.domain or "",
             )
             followup_response = await call_llm(followup_prompt, BEHAVIORAL_SYSTEM, current_user.id, current_user.plan.value)
 

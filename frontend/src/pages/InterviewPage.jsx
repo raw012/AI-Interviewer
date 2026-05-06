@@ -1,7 +1,7 @@
 /**
- * InterviewPage.jsx - Main interview page
- * Features: Audio recording, question display, Monaco Editor for coding,
- * timer, and answer submission
+ * InterviewPage.jsx - Main interview page with state machine
+ * States: loading → questioning → thinking → answering → evaluating → feedback → questioning (loop) → completed
+ * Features: TTS, countdown timers, single-question card UI
  */
 
 import React, { useState, useEffect, useRef } from "react";
@@ -23,22 +23,34 @@ const LANGUAGES = {
 export default function InterviewPage() {
   const sessionIdFromUrl = window.location.pathname.split("/").pop();
   const [sessionData, setSessionData] = useState(null);
+  
+  // Current state machine
+  const [state, setState] = useState("loading"); // loading | questioning | thinking | answering | evaluating | feedback | completed
   const [currentQuestion, setCurrentQuestion] = useState(null);
-  const [currentQuestionId, setCurrentQuestionId] = useState(null);
-  const [recording, setRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState(null);
-  const [transcriptText, setTranscriptText] = useState("");
-  const [code, setCode] = useState(
-    LANGUAGES.python.template
-  );
+  const [feedback, setFeedback] = useState("");
+  const [score, setScore] = useState(0);
+  
+  // Answer input
+  const [answerText, setAnswerText] = useState("");
+  const [code, setCode] = useState(LANGUAGES.python.template);
   const [selectedLanguage, setSelectedLanguage] = useState("python");
-  const [loading, setLoading] = useState(false);
+  
+  // Timers
   const [timeRemaining, setTimeRemaining] = useState(null);
+  const [thinkingCountdown, setThinkingCountdown] = useState(5);
+  const [answerCountdown, setAnswerCountdown] = useState(120);
+  
+  // UI state
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [quotaExceeded, setQuotaExceeded] = useState(false);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
+  const [questionsAnswered, setQuestionsAnswered] = useState(0);
+  
+  // Refs
   const timerIntervalRef = useRef(null);
+  const thinkingIntervalRef = useRef(null);
+  const answerIntervalRef = useRef(null);
+  const editorRef = useRef(null);
+  const ttsRef = useRef(null);
 
   // Load session on mount
   useEffect(() => {
@@ -48,17 +60,17 @@ export default function InterviewPage() {
       setSessionData(data);
       if (data.questions && data.questions.length > 0) {
         setCurrentQuestion(data.questions[0]);
-        setCurrentQuestionId(data.questions[0].id || `q-${Math.random()}`);
-        // Start timer
+        // Start session timer
         const minutes = data.duration_minutes || 30;
         setTimeRemaining(minutes * 60);
+        setState("questioning");
       }
     }
   }, []);
 
-  // Timer effect
+  // Session timer effect (counts down from duration)
   useEffect(() => {
-    if (timeRemaining === null) return;
+    if (timeRemaining === null || state === "completed") return;
 
     timerIntervalRef.current = setInterval(() => {
       setTimeRemaining((prev) => {
@@ -72,7 +84,76 @@ export default function InterviewPage() {
     }, 1000);
 
     return () => clearInterval(timerIntervalRef.current);
-  }, [timeRemaining]);
+  }, [timeRemaining, state]);
+
+  // Thinking countdown effect
+  useEffect(() => {
+    if (state !== "thinking") return;
+
+    if (thinkingCountdown <= 0) {
+      // Transition to answering after thinking countdown
+      setThinkingCountdown(5); // Reset for next use
+      setState("answering");
+      setAnswerCountdown(120); // Reset answer timer
+      return;
+    }
+
+    thinkingIntervalRef.current = setInterval(() => {
+      setThinkingCountdown((prev) => {
+        if (prev <= 1) {
+          setState("answering");
+          setAnswerCountdown(120);
+          return 5;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(thinkingIntervalRef.current);
+  }, [state, thinkingCountdown]);
+
+  // Answer countdown effect (2 minute timer)
+  useEffect(() => {
+    if (state !== "answering") return;
+
+    if (answerCountdown <= 0) {
+      // Auto-submit when timer hits 0
+      handleSubmitAnswer();
+      return;
+    }
+
+    answerIntervalRef.current = setInterval(() => {
+      setAnswerCountdown((prev) => {
+        if (prev <= 1) {
+          // Will auto-submit via the answerCountdown <= 0 check above
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(answerIntervalRef.current);
+  }, [state, answerCountdown]);
+
+  // Auto-transition from feedback to questioning after 3 seconds
+  useEffect(() => {
+    if (state !== "feedback") return;
+
+    const timer = setTimeout(() => {
+      setState("questioning");
+      setAnswerText("");
+      setCode(LANGUAGES[selectedLanguage].template);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [state, selectedLanguage]);
+
+  // TTS with auto-transition to thinking
+  useEffect(() => {
+    if (state === "questioning" && currentQuestion) {
+      speakQuestion();
+    }
+  }, [state, currentQuestion]);
 
   const formatTime = (seconds) => {
     if (!seconds) return "0:00";
@@ -81,88 +162,67 @@ export default function InterviewPage() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
-      };
-
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: "audio/mp3" });
-        setAudioBlob(blob);
-      };
-
-      mediaRecorder.start();
-      setRecording(true);
-    } catch (err) {
-      alert("Microphone access denied. Please enable microphone access.");
+  const speakQuestion = () => {
+    const speechText = `${currentQuestion.question}. Focus: ${currentQuestion.question_focus}`;
+    const utterance = new SpeechSynthesisUtterance(speechText);
+    
+    // Try to find female voice
+    const voices = speechSynthesis.getVoices();
+    const femaleVoice = voices.find(
+      (v) => v.name.includes("Female") || v.name.includes("woman")
+    ) || voices.find((v) => v.lang === "en-US");
+    
+    if (femaleVoice) {
+      utterance.voice = femaleVoice;
     }
+    
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    // After TTS finishes, transition to thinking
+    utterance.onend = () => {
+      setState("thinking");
+      setThinkingCountdown(5);
+    };
+
+    speechSynthesis.cancel(); // Clear any previous speech
+    ttsRef.current = utterance;
+    speechSynthesis.speak(utterance);
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
-      setRecording(false);
-    }
+  const handleEditorDidMount = (editor) => {
+    editorRef.current = editor;
+    setTimeout(() => {
+      editor.focus();
+    }, 100);
   };
 
-  const transcribeAudio = async () => {
-    if (!audioBlob) return;
-
-    setLoading(true);
-    const formData = new FormData();
-    formData.append("file", audioBlob, "audio.mp3");
-
-    try {
-      const response = await fetchWithAuth(`${API_BASE}/interview/upload-audio`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setTranscriptText(data.transcript);
-      } else {
-        alert("Transcription failed: " + data.detail);
-      }
-    } catch (err) {
-      alert("Error: " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const submitAnswer = async () => {
-    let userAnswer = transcriptText;
-
-    // For coding, use code instead of transcript
-    if (currentQuestion.interview_type === "coding") {
-      userAnswer = code;
-    }
+  const handleSubmitAnswer = async () => {
+    const isCoding = currentQuestion.interview_type === "coding";
+    let userAnswer = isCoding ? code : answerText;
 
     if (!userAnswer.trim()) {
-      alert("Please provide an answer before submitting");
-      return;
+      // Empty submission: for coding, force score 0; for text, skip
+      if (!isCoding) {
+        userAnswer = "[No answer provided]";
+      }
     }
 
-    setLoading(true);
+    setState("evaluating");
 
     try {
       const response = await fetchWithAuth(`${API_BASE}/interview/answer`, {
         method: "POST",
         body: JSON.stringify({
           session_id: sessionData.session_id,
-          question_id: currentQuestionId,
+          question_id: currentQuestion.id || `q-${Math.random()}`,
+          question: currentQuestion.question,
+          question_focus: currentQuestion.question_focus,
           interview_type: currentQuestion.interview_type,
           user_answer: userAnswer,
           depth_layer: currentQuestion.depth_layer || 1,
+          domain: sessionData.domain,
         }),
       });
 
@@ -171,46 +231,39 @@ export default function InterviewPage() {
       if (response.status === 429) {
         setQuotaExceeded(true);
         setShowQuotaModal(true);
-        setLoading(false);
+        setState("questioning");
         return;
       }
 
       if (!response.ok) {
         alert("Error: " + data.detail);
-        setLoading(false);
+        setState("questioning");
         return;
       }
 
-      // Show feedback briefly then load next question
-      alert(
-        `Score: ${data.score}/100\nFeedback: ${data.feedback}`
-      );
+      // Show feedback
+      setScore(data.score);
+      setFeedback(data.feedback);
+      setQuestionsAnswered((prev) => prev + 1);
 
       if (data.next_question) {
+        // Load next question, will auto-transition after 3 seconds
         setCurrentQuestion(data.next_question);
-        setCurrentQuestionId(`q-${Math.random()}`);
-        setTranscriptText("");
-        setCode(LANGUAGES[selectedLanguage].template);
-        setAudioBlob(null);
+        setState("feedback");
       } else {
         // Interview complete
-        completeInterview();
+        setState("completed");
       }
     } catch (err) {
       alert("Error: " + err.message);
-    } finally {
-      setLoading(false);
+      setState("questioning");
     }
   };
 
   const handleEndInterview = async () => {
-    await completeInterview();
-  };
+    setState("loading");
 
-  const completeInterview = async () => {
     if (!sessionData) return;
-
-    setLoading(true);
 
     try {
       const response = await fetchWithAuth(`${API_BASE}/interview/complete`, {
@@ -224,19 +277,44 @@ export default function InterviewPage() {
         window.location.href = `/summary/${sessionData.session_id}`;
       } else {
         alert("Error completing interview: " + data.detail);
+        setState("questioning");
       }
     } catch (err) {
       alert("Error: " + err.message);
-    } finally {
-      setLoading(false);
+      setState("questioning");
     }
   };
 
-  if (!sessionData || !currentQuestion) {
-    return <div>Loading...</div>;
+  if (!sessionData) {
+    return <div className="loading-screen">Loading...</div>;
+  }
+
+  if (state === "completed") {
+    return (
+      <div className="interview-page">
+        <Navbar />
+        <div className="completion-screen">
+          <h1>Interview Complete! 🎉</h1>
+          <p>You've answered {questionsAnswered} questions.</p>
+          <button onClick={() => window.location.href = `/summary/${sessionData.session_id}`}>
+            View Summary
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentQuestion) {
+    return (
+      <div className="interview-page">
+        <Navbar />
+        <div className="loading-screen">Loading question...</div>
+      </div>
+    );
   }
 
   const isCoding = currentQuestion.interview_type === "coding";
+  const showFollowUpTag = currentQuestion.depth_layer > 1;
 
   return (
     <div className="interview-page">
@@ -246,141 +324,153 @@ export default function InterviewPage() {
         <QuotaExceededModal onClose={() => setShowQuotaModal(false)} />
       )}
 
+      {/* LinkedIn-style single question card */}
       <div className="interview-container">
-        {/* Header with Timer */}
+        {/* Header */}
         <div className="interview-header">
-          <h1>{currentQuestion.interview_type.toUpperCase()} Interview</h1>
-          <div className="timer">
-            <span className={timeRemaining < 300 ? "warning" : ""}>
-              {formatTime(timeRemaining)}
-            </span>
+          <div className="header-left">
+            <h3>{currentQuestion.interview_type.toUpperCase()} Interview</h3>
+            {showFollowUpTag && (
+              <span className="followup-tag">
+                Follow-up · Layer {currentQuestion.depth_layer} / 5
+              </span>
+            )}
           </div>
-          <button className="end-button" onClick={handleEndInterview}>
-            End Interview
-          </button>
+          <div className="header-center">
+            <div className="timer" style={{ color: timeRemaining < 300 ? "#e74c3c" : "#2c3e50" }}>
+              {formatTime(timeRemaining)}
+            </div>
+          </div>
+          <div className="header-right">
+            <button className="end-button" onClick={handleEndInterview}>
+              End Interview
+            </button>
+          </div>
         </div>
 
-        {/* Main Content */}
-        <div className={`interview-content ${isCoding ? "has-editor" : ""}`}>
-          {/* Question Panel */}
-          <div className="question-panel">
-            <div className="question-header">
-              <h2>Question</h2>
-              {currentQuestion.depth_layer > 1 && (
-                <span className="depth-badge">
-                  Follow-up (Layer {currentQuestion.depth_layer}/3)
-                </span>
-              )}
-            </div>
-            <div className="question-text">{currentQuestion.question}</div>
-            <p className="focus-hint">
+        {/* Question Card */}
+        <div className="question-card">
+          <div className="question-content">
+            <p className="question-text">{currentQuestion.question}</p>
+            <p className="question-focus">
               <strong>Focus:</strong> {currentQuestion.question_focus}
             </p>
           </div>
 
-          {/* Editor Panel (for coding only) */}
-          {isCoding && (
-            <div className="editor-panel">
-              <div className="editor-header">
-                <h3>Write Your Solution</h3>
-                <select
-                  value={selectedLanguage}
-                  onChange={(e) => {
-                    setSelectedLanguage(e.target.value);
-                    setCode(LANGUAGES[e.target.value].template);
-                  }}
-                >
-                  {Object.entries(LANGUAGES).map(([key, val]) => (
-                    <option key={key} value={key}>
-                      {val.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <Editor
-                height="400"
-                language={selectedLanguage}
-                value={code}
-                onChange={(value) => setCode(value || "")}
-                theme="vs-light"
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                }}
-              />
-            </div>
-          )}
-
-          {/* Answer Panel (for non-coding) */}
-          {!isCoding && (
-            <div className="answer-panel">
-              <h3>Your Answer</h3>
-
-              <div className="audio-section">
-                <div className="audio-controls">
-                  {!recording ? (
-                    <button
-                      className="btn-record"
-                      onClick={startRecording}
-                      disabled={loading}
-                    >
-                      🎤 Start Recording
-                    </button>
-                  ) : (
-                    <button
-                      className="btn-stop"
-                      onClick={stopRecording}
-                      disabled={loading}
-                    >
-                      ⏹ Stop Recording
-                    </button>
-                  )}
-
-                  {audioBlob && (
-                    <>
-                      <button
-                        className="btn-transcribe"
-                        onClick={transcribeAudio}
-                        disabled={loading}
-                      >
-                        📝 Transcribe
-                      </button>
-                      <audio
-                        controls
-                        src={URL.createObjectURL(audioBlob)}
-                        className="audio-player"
-                      />
-                    </>
-                  )}
+          {/* State-specific answer section */}
+          <div className="answer-section">
+            {state === "thinking" && (
+              <div className="thinking-state">
+                <div className="countdown-display">
+                  <div className="countdown-number">{thinkingCountdown}</div>
+                  <p>Take a moment to think...</p>
                 </div>
               </div>
+            )}
 
-              {transcriptText && (
-                <textarea
-                  className="transcript-display"
-                  value={transcriptText}
-                  onChange={(e) => setTranscriptText(e.target.value)}
-                  placeholder="Transcript will appear here..."
-                  rows={8}
-                />
-              )}
-            </div>
-          )}
+            {state === "questioning" && (
+              <div className="questioning-state">
+                <div className="tts-playing">
+                  <div className="spinner"></div>
+                  <p>Reading question aloud...</p>
+                </div>
+              </div>
+            )}
+
+            {state === "answering" && (
+              <div className="answering-state">
+                <div className="answer-timer">
+                  <span className={answerCountdown < 30 ? "warning" : ""}>
+                    {formatTime(answerCountdown)}
+                  </span>
+                </div>
+
+                {isCoding ? (
+                  <div className="editor-panel">
+                    <div className="editor-header">
+                      <h4>Write Your Solution</h4>
+                      <select
+                        value={selectedLanguage}
+                        onChange={(e) => {
+                          setSelectedLanguage(e.target.value);
+                          setCode(LANGUAGES[e.target.value].template);
+                        }}
+                      >
+                        {Object.entries(LANGUAGES).map(([key, val]) => (
+                          <option key={key} value={key}>
+                            {val.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="editor-container">
+                      <Editor
+                        height="300px"
+                        language={selectedLanguage}
+                        value={code}
+                        onChange={(value) => setCode(value || "")}
+                        onMount={handleEditorDidMount}
+                        theme="vs-light"
+                        options={{
+                          readOnly: false,
+                          automaticLayout: true,
+                          minimap: { enabled: false },
+                          fontSize: 14,
+                          scrollBeyondLastLine: false,
+                          wordWrap: "on",
+                          formatOnPaste: true,
+                          insertSpaces: true,
+                          tabSize: 2,
+                          lineNumbers: "on",
+                          scrollbar: { vertical: "auto", horizontal: "auto" },
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <textarea
+                    className="answer-textarea"
+                    placeholder="Type your answer here..."
+                    value={answerText}
+                    onChange={(e) => setAnswerText(e.target.value)}
+                  />
+                )}
+
+                <button
+                  className="submit-button"
+                  onClick={handleSubmitAnswer}
+                  disabled={state === "evaluating"}
+                >
+                  {state === "evaluating" ? "Submitting..." : "Submit Answer"}
+                </button>
+              </div>
+            )}
+
+            {state === "evaluating" && (
+              <div className="evaluating-state">
+                <div className="spinner"></div>
+                <p>AI is evaluating your answer...</p>
+              </div>
+            )}
+
+            {state === "feedback" && (
+              <div className="feedback-state">
+                <div className={`score-badge score-${score >= 70 ? "good" : score >= 50 ? "fair" : "poor"}`}>
+                  <div className="score-value">{score}</div>
+                  <div className="score-label">/100</div>
+                </div>
+                <div className="feedback-text">
+                  <p>{feedback}</p>
+                </div>
+                <p className="auto-advance-notice">Loading next question...</p>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Submit Button */}
-        <div className="interview-footer">
-          <button
-            className="submit-button"
-            onClick={submitAnswer}
-            disabled={
-              loading ||
-              (!isCoding && !transcriptText.trim()) ||
-              (isCoding && !code.trim())
-            }
-          >
-            {loading ? "Processing..." : "Submit Answer"}
-          </button>
+        {/* Question counter */}
+        <div className="question-counter">
+          Question {questionsAnswered + 1}
         </div>
       </div>
     </div>

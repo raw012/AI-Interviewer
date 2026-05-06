@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  backend:
+    name: Backend Check
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: interview_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      GEMINI_API_KEY: dummy_gemini_key
+      GROQ_API_KEY: dummy_groq_key
+      POSTGRES_URL: postgresql+asyncpg://ci_user:ci_password@localhost:5432/interview_db
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci_test_secret_key_32_characters_long
+      STRIPE_PUBLISHABLE_KEY: placeholder
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Check all modules import correctly
+        working-directory: backend
+        run: python -c "import main; print('Backend imports OK')"
+
+      - name: Initialize database tables
+        working-directory: backend
+        run: python -c "from database import *; import asyncio; asyncio.run(init_db()); print('DB init OK')"
+
+      - name: Start backend and check health
+        working-directory: backend
+        run: |
+          uvicorn main:app --host 0.0.0.0 --port 8000 &
+          sleep 3
+          curl -f http://localhost:8000/docs || exit 1
+          echo "Backend health check OK"
+
+  frontend:
+    name: Frontend Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          REACT_APP_API_BASE: http://localhost:8000
+          CI: false
+        run: npm run build
+
+      - name: Check build output exists
+        run: |
+          test -d frontend/build || exit 1
+          echo "Frontend build OK"

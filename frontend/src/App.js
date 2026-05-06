@@ -7,8 +7,9 @@
  *         /pricing → Pricing page
  */
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import "./App.css";
 
 import { isAuthenticated } from "./utils/auth";
@@ -28,56 +29,57 @@ function ProtectedRoute({ children }) {
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        {/* Auth Route */}
-        <Route path="/auth" element={<AuthPage />} />
+    <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID || ""}>
+      <Router>
+        <Routes>
+          {/* Auth Route */}
+          <Route path="/auth" element={<AuthPage />} />
 
-        {/* Protected Routes */}
-        <Route
-          path="/setup"
-          element={
-            <ProtectedRoute>
-              <SetupPage />
-            </ProtectedRoute>
-          }
-        />
+          {/* Protected Routes */}
+          <Route
+            path="/setup"
+            element={
+              <ProtectedRoute>
+                <SetupPage />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/interview/:sessionId"
-          element={
-            <ProtectedRoute>
-              <InterviewPage />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/interview/:sessionId"
+            element={
+              <ProtectedRoute>
+                <InterviewPage />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/summary/:sessionId"
-          element={
-            <ProtectedRoute>
-              <SummaryPage />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/summary/:sessionId"
+            element={
+              <ProtectedRoute>
+                <SummaryPage />
+              </ProtectedRoute>
+            }
+          />
 
-        <Route
-          path="/pricing"
-          element={
-            <ProtectedRoute>
-              <PricingPage />
-            </ProtectedRoute>
-          }
-        />
+          <Route
+            path="/pricing"
+            element={
+              <ProtectedRoute>
+                <PricingPage />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Root redirect */}
-        <Route
-          path="/"
-          element={
-            isAuthenticated() ? (
-              <Navigate to="/setup" replace />
-            ) : (
-              <Navigate to="/auth" replace />
+          {/* Root redirect */}
+          <Route
+            path="/"
+            element={
+              isAuthenticated() ? (
+                <Navigate to="/setup" replace />
+              ) : (
+                <Navigate to="/auth" replace />
             )
           }
         />
@@ -86,6 +88,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
+    </GoogleOAuthProvider>
   );
 }
 

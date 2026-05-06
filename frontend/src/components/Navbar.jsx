@@ -1,5 +1,6 @@
 /**
  * Navbar.jsx - Navigation bar with user info and quota display
+ * Features: LinkedIn-style design, mobile hamburger menu, responsive layout
  */
 
 import React, { useState, useEffect } from "react";
@@ -12,6 +13,7 @@ export default function Navbar() {
   const [user, setUser] = useState(null);
   const [quota, setQuota] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     fetchUserInfo();
@@ -19,13 +21,11 @@ export default function Navbar() {
 
   const fetchUserInfo = async () => {
     try {
-      // Get user from localStorage (stored during auth)
       const userStr = localStorage.getItem("user_info");
       if (userStr) {
         setUser(JSON.parse(userStr));
       }
 
-      // Get quota from API
       const response = await fetchWithAuth(`${API_BASE}/user/quota`);
       const data = await response.json();
       setQuota(data);
@@ -36,33 +36,57 @@ export default function Navbar() {
     }
   };
 
+  const handleLogout = () => {
+    setMobileMenuOpen(false);
+    logout();
+  };
+
   return (
     <nav className="navbar">
-      <div className="navbar-brand">
-        <a href="/">AI Interview Coach</a>
-      </div>
+      <div className="navbar-container">
+        {/* Logo */}
+        <div className="navbar-brand">
+          <a href="/">🎯 Interview Coach</a>
+        </div>
 
-      <div className="navbar-right">
-        {!loading && user && quota && (
-          <>
-            <div className="user-info">
-              <span className="username">{user.username}</span>
-              <span className={`plan-badge ${quota.plan}`}>
-                {quota.plan.toUpperCase()}
-              </span>
-            </div>
-
-            {quota.plan === "free" && (
-              <div className="quota-display">
-                <span>{quota.requests_used_today} / {quota.limit} requests today</span>
-              </div>
-            )}
-          </>
-        )}
-
-        <button className="logout-button" onClick={logout}>
-          Logout
+        {/* Mobile Menu Toggle */}
+        <button 
+          className="hamburger-menu visible-mobile"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label="Toggle menu"
+        >
+          <span></span>
+          <span></span>
+          <span></span>
         </button>
+
+        {/* Right Section - Desktop always visible, Mobile toggle */}
+        <div className={`navbar-right ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+          {!loading && user && quota && (
+            <>
+              <div className="user-info">
+                <div className="user-details">
+                  <span className="username">{user.username}</span>
+                  <span className={`plan-badge ${quota.plan}`}>
+                    {quota.plan.toUpperCase()}
+                  </span>
+                </div>
+                {quota.plan === "free" && (
+                  <span className="quota-display">
+                    {quota.requests_used_today} / {quota.limit} used today
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+
+          <button 
+            className="logout-button" 
+            onClick={handleLogout}
+          >
+            Logout
+          </button>
+        </div>
       </div>
     </nav>
   );

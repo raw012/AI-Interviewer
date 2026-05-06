@@ -62,9 +62,10 @@ Return JSON only:
 """
 
 
-def resume_followup_prompt(resume_text: str, conversation_history: list, depth_layer: int, user_comments: str = "") -> str:
+def resume_followup_prompt(resume_text: str, conversation_history: list, depth_layer: int, domain: str = "", user_comments: str = "") -> str:
     """Generate a follow-up resume-based interview question."""
     history_str = "\n".join([f"Q: {q}\nA: {a}" for q, a in conversation_history])
+    domain_restriction = f"Domain restriction: ONLY ask about {domain}. Do not ask about unrelated topics." if domain else ""
     return f"""
 Resume:
 {resume_text}
@@ -74,9 +75,11 @@ Conversation so far:
 
 Additional candidate notes: {user_comments if user_comments else "None"}
 
+{domain_restriction}
+
 Generate a Layer {depth_layer} follow-up question that digs deeper into the candidate's last answer.
 Layer 2 = probe implementation details or technical decisions.
-Layer 3 = challenge with edge cases, failure modes, or alternative approaches.
+Layer 3-5 = challenge with edge cases, failure modes, alternative approaches, or deeper theory.
 
 Return JSON only:
 {{
@@ -95,8 +98,9 @@ computer organization, OS concepts, networking, databases, or domain-specific to
 Always return valid JSON only."""
 
 
-def technical_question_prompt(resume_text: str, job_description: str, asked_topics: list, user_comments: str = "") -> str:
+def technical_question_prompt(resume_text: str, job_description: str, asked_topics: list, domain: str = "", user_comments: str = "") -> str:
     """Generate a technical interview question."""
+    domain_restriction = f"Domain restriction: ONLY ask questions about {domain}. Do not ask about other topics." if domain else ""
     return f"""
 Resume:
 {resume_text}
@@ -107,6 +111,8 @@ Job Description:
 Topics already covered this session: {asked_topics}
 
 Additional candidate notes: {user_comments if user_comments else "None"}
+
+{domain_restriction}
 
 Select a technical concept question NOT yet covered. Prioritize topics mentioned in the JD or resume.
 
@@ -149,15 +155,19 @@ Return JSON only:
 """
 
 
-def behavioral_followup_prompt(conversation_history: list, depth_layer: int) -> str:
+def behavioral_followup_prompt(conversation_history: list, depth_layer: int, domain: str = "") -> str:
     """Generate a follow-up behavioral interview question."""
     history_str = "\n".join([f"Q: {q}\nA: {a}" for q, a in conversation_history])
+    domain_restriction = f"Domain restriction: Stay focused on {domain}. Do not introduce unrelated topics." if domain else ""
     return f"""
 Conversation so far:
 {history_str}
 
-Generate a Layer {depth_layer} follow-up to verify the candidate's answer is genuine.
-Layer 2: Ask for specific names, dates, metrics, or what the candidate personally did vs the team.
+{domain_restriction}
+
+Generate a Layer {depth_layer} follow-up to verify and deepen the candidate's answer.
+Layer 2 = Ask for specific names, dates, metrics, or what the candidate personally did vs the team.
+Layer 3-5 = Challenge assumptions, ask about failure modes, handling disagreements, or lessons for future.
 
 Return JSON only:
 {{

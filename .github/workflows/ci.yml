@@ -53,10 +53,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
-        working-directory: backend
         run: pip install -r requirements.txt
 
       - name: Check all modules import correctly
@@ -92,7 +91,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm install --legacy-peer-deps
 
       - name: Build frontend
         working-directory: frontend

@@ -77,11 +77,11 @@ jobs:
         working-directory: backend
         run: |
           python3 << 'EOF'
-import main, models, database, auth
-from routers import auth_router, interview_router, user_router
-from services import ai_gateway, stt_service, prompt_templates, json_utils
-print("Module imports OK")
-EOF
+          import main, models, database, auth
+          from routers import auth_router, interview_router, user_router
+          from services import ai_gateway, stt_service, prompt_templates, json_utils
+          print("Module imports OK")
+          EOF
         continue-on-error: true
 
       - name: Verify critical files exist

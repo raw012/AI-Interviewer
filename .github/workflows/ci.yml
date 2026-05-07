@@ -46,7 +46,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -75,7 +75,14 @@ jobs:
 
       - name: Test module imports
         working-directory: backend
-        run: python -c "import main, models, database, auth; from routers import auth_router, interview_router, user_router; from services import ai_gateway, stt_service, prompt_templates, json_utils; print('✓ All backend modules import OK')" 2>&1 || echo "Note: Some local imports may require environment setup"
+        run: |
+          python3 << 'EOF'
+import main, models, database, auth
+from routers import auth_router, interview_router, user_router
+from services import ai_gateway, stt_service, prompt_templates, json_utils
+print("Module imports OK")
+EOF
+        continue-on-error: true
 
       - name: Verify critical files exist
         working-directory: backend
@@ -96,7 +103,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
         uses: actions/setup-node@v5
@@ -142,7 +149,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Check file structure
         run: |
@@ -173,7 +180,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5

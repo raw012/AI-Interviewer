@@ -40,3 +40,11 @@ yarn-error.log
 
 # Videos (can be large)
 backend/videos/
+
+# Build artifacts
+frontend/build/
+frontend/.cache/
+dist/
+
+# CI/CD
+.github/workflows/*.log

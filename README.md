@@ -1,61 +1,72 @@
 # AI Technical Interview Coach
 
-A full-stack AI mock interview platform supporting four modes: **Coding**, **Resume-based**, **Technical**, and **Behavioral**. Users speak or type their answers, receive AI-generated scores and feedback, and get adaptive follow-up questions that probe 2–3 layers deep. Session history is stored per user with a free tier of 10 AI requests per day.
+AI-powered, time-based mock technical interview platform with real-time video recording, speech transcription, automated scoring, and context-aware question generation.
+
+Built using React, FastAPI, Whisper (Groq API), and LLaMA-based evaluation.
+
+---
+
+## Overview
+
+This project simulates a technical interview environment where users can:
+
+- Choose a 30-minute or 60-minute interview
+- Record timed interview responses without a fixed question limit
+- Transcribe speech to text automatically
+- Receive AI-generated feedback and scores
+- Get adaptive questions using a compact interview summary plus the five most recent full Q&A pairs
+- Review transcripts and performance summaries
+
+When the interview timer expires, the current answer is not interrupted. The interview ends after that answer is submitted and evaluated, then displays a feedback table containing each question, answer, improvement advice, and score.
+
+The system integrates browser media capture, backend audio processing, and large language model evaluation into a complete full-stack workflow.
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Frontend | React, Monaco Editor |
-| Backend | FastAPI (Python) |
-| Database | PostgreSQL + Redis |
-| Auth | JWT |
-| LLM | Gemini 1.5 Flash → Groq LLaMA 3.1 (fallback) |
-| Speech-to-Text | Groq Whisper (`whisper-large-v3`) |
-
----
-
-## Installation & Setup
-
-**Prerequisites:** Python 3.8+, Node.js 14+, PostgreSQL, Redis
+### Frontend
+- React (JavaScript)
+- MediaRecorder API
+- Fetch API
 
 ### Backend
-```bash
-cd backend
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-```
-
-Create `backend/.env`:
-```bash
-GEMINI_API_KEY=        # https://aistudio.google.com/apikey
-GROQ_API_KEY=          # https://console.groq.com/keys
-POSTGRES_URL=postgresql+asyncpg://user:password@localhost:5432/interview_db
-REDIS_URL=redis://localhost:6379
-JWT_SECRET=            # python3 -c "import secrets; print(secrets.token_hex(32))"
-STRIPE_PUBLISHABLE_KEY=placeholder
-```
-
-```bash
-alembic upgrade head   # initialize database tables
-```
-
-### Frontend
-```bash
-cd frontend && npm install
-```
+- FastAPI (Python)
+- FFmpeg (audio extraction)
+- Groq Whisper API (speech-to-text)
+- LLaMA 3 (evaluation and follow-up generation)
+- UUID-based session management
 
 ---
 
-## Running
+## Project Structure
+AI-Interview-Coach/
 
-```bash
-# Terminal 1 — backend (http://localhost:8000)
-cd backend && source venv/bin/activate
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+│
+├── frontend/
 
-# Terminal 2 — frontend (http://localhost:3000)
-cd frontend && npm start
-```
+│ ├── src/
+
+│ └── package.json
+
+│
+
+├── backend/
+
+│ ├── main.py
+
+│ ├── evaluator.py
+
+│ ├── speech.py
+
+│ ├── requirements.txt
+
+│ └── videos/
+
+│
+
+└── README.md
+
+## Installation
+### Clone Repository
+### Add YOUR OWN Grok API Key

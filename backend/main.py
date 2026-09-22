@@ -19,6 +19,7 @@ from storage import (
     api_key_for_user,
     api_key_status,
     authenticate_user,
+    cancel_interview,
     complete_interview,
     create_interview,
     create_user_topic,
@@ -421,7 +422,6 @@ def start_interview(request: dict, user: dict = Depends(current_user)) -> dict:
         "cumulative_summary": "",
         "history": [],
     }
-
     if mode == "special":
         first_question = generate_new_question(session)
         session["is_intro_done"] = True
@@ -445,6 +445,16 @@ def start_interview(request: dict, user: dict = Depends(current_user)) -> dict:
         "mode": mode,
         "topic": topic,
     }
+
+
+@app.post("/cancel/{session_id}")
+def cancel_active_interview(
+    session_id: str, user: dict = Depends(current_user)
+) -> dict:
+    owned_session(session_id, user["id"])
+    cancel_interview(session_id)
+    sessions.pop(session_id, None)
+    return {"ok": True}
 
 
 @app.post("/upload/{session_id}")

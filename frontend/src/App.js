@@ -63,6 +63,7 @@ function App() {
   const recognitionRef = useRef(null);
   const startRecordingRef = useRef(null);
   const finishAfterAnswerRef = useRef(false);
+  const discardRecordingRef = useRef(false);
 
   const [jobDescription, setJobDescription] = useState("");
   const [mode, setMode] = useState("general");
@@ -383,6 +384,12 @@ function App() {
     let chunks = [];
     recorder.ondataavailable = (e) => chunks.push(e.data);
     recorder.onstop = async () => {
+      if (discardRecordingRef.current) {
+        discardRecordingRef.current = false;
+        chunks = [];
+        setIsProcessing(false);
+        return;
+      }
       try {
         setIsProcessing(true);
         const blob = new Blob(chunks, { type: "video/webm" });
@@ -426,6 +433,31 @@ function App() {
     if (recognitionRef.current) { recognitionRef.current.stop(); recognitionRef.current = null; }
     setRecording(false);
     setLiveTranscript("");
+  };
+
+  const exitInterview = async () => {
+    if (!window.confirm("Exit this interview? The current unanswered question will not be saved.")) return;
+    discardRecordingRef.current = true;
+    finishAfterAnswerRef.current = false;
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+    setRecording(false);
+    setIsProcessing(false);
+    if (sessionId) {
+      try {
+        await apiRequest(`/cancel/${sessionId}`, token, { method: "POST" });
+      } catch (error) {
+        console.error("Unable to cancel interview on the server:", error);
+      }
+    }
+    setSessionId(null);
+    setInterviewEndsAt(null);
+    setInterviewTimeExpired(false);
+    setLiveTranscript("");
+    setPage("dashboard");
   };
 
   startRecordingRef.current = startRecording;
@@ -674,6 +706,7 @@ function App() {
         </nav>
         <div className="setup-container">
           <div className="hero">
+            <button className="back-dashboard" onClick={() => setPage("dashboard")}>← Back to dashboard</button>
             <h1 className="hero-title">Ace your technical interview</h1>
             <p className="hero-sub">AI-powered practice tailored to your job description. Get real-time feedback.</p>
           </div>
@@ -794,6 +827,7 @@ function App() {
           <div className="navbar-status">
             <div className="progress-pill">Question {questionNum}</div>
             <div className={`progress-pill${interviewTimeExpired ? " time-expired" : ""}`}>{formatTime(interviewTimeLeft)}</div>
+            <button className="exit-interview" onClick={exitInterview}>Exit interview</button>
           </div>
         </nav>
         <div className="question-preview-card">
@@ -832,6 +866,7 @@ function App() {
           <div className="navbar-status">
             <div className="progress-pill">Question {questionNum}</div>
             <div className={`progress-pill${interviewTimeExpired ? " time-expired" : ""}`}>{formatTime(interviewTimeLeft)}</div>
+            <button className="exit-interview" onClick={exitInterview}>Exit interview</button>
           </div>
         </nav>
         <div className="recording-body">

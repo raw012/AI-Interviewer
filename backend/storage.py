@@ -281,6 +281,15 @@ def complete_interview(session_id: str, overall_score: float) -> None:
         )
 
 
+def cancel_interview(session_id: str) -> None:
+    with connection() as db:
+        db.execute(
+            """UPDATE interviews SET status='cancelled', completed_at=?
+               WHERE session_id=? AND status='active'""",
+            (now_iso(), session_id),
+        )
+
+
 def upsert_memory(
     user_id: str, kind: str, topic: str, content: str, source_answer_id: int,
 ) -> None:

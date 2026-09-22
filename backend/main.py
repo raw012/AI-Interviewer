@@ -30,6 +30,7 @@ from storage import (
     issue_token,
     list_interviews,
     list_memory_items,
+    list_recording_reviews,
     list_user_topics,
     memory_context,
     recent_questions,
@@ -243,7 +244,10 @@ def remove_resume(user: dict = Depends(current_user)) -> dict:
 
 @app.get("/history")
 def interview_history(user: dict = Depends(current_user)) -> dict:
-    return {"interviews": list_interviews(user["id"])}
+    return {
+        "interviews": list_interviews(user["id"]),
+        "recording_reviews": list_recording_reviews(user["id"]),
+    }
 
 
 @app.get("/memory")
@@ -258,12 +262,16 @@ def dashboard(user: dict = Depends(current_user)) -> dict:
     for skill in skills:
         skill["name"] = catalog.get(skill["topic"], "General Interview" if skill["topic"] == "general" else skill["topic"].replace("_", " ").title())
     memories = list_memory_items(user["id"])
+    interviews = list_interviews(user["id"])
+    recording_reviews = list_recording_reviews(user["id"])
     return {
         "skills": skills,
         "memories": memories,
-        "interviews": list_interviews(user["id"]),
+        "interviews": interviews,
+        "recording_reviews": recording_reviews,
         "summary": {
             "interviews": len(list_interviews(user["id"], 1000)),
+            "recording_reviews": len(list_recording_reviews(user["id"], 1000)),
             "active_memories": len(memories),
             "weak_points": sum(1 for item in memories if item["kind"] == "weak_point"),
             "strong_points": sum(1 for item in memories if item["kind"] == "strong_point"),

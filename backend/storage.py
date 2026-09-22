@@ -367,8 +367,23 @@ def list_interviews(user_id: str, limit: int = 20) -> list[dict]:
                i.status,i.created_at,i.completed_at,i.cumulative_summary,
                COUNT(a.id) AS questions_answered
                FROM interviews i LEFT JOIN answers a ON a.session_id=i.session_id
-               WHERE i.user_id=? GROUP BY i.session_id
+               WHERE i.user_id=? AND i.mode!='recording' AND i.status!='cancelled'
+               GROUP BY i.session_id
                ORDER BY i.created_at DESC LIMIT ?""",
+            (user_id, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_recording_reviews(user_id: str, limit: int = 20) -> list[dict]:
+    with connection() as db:
+        rows = db.execute(
+            """SELECT i.session_id,i.mode,i.topic,i.duration_minutes,i.overall_score,
+               i.status,i.created_at,i.completed_at,i.cumulative_summary,
+               COUNT(a.id) AS questions_answered
+               FROM interviews i LEFT JOIN answers a ON a.session_id=i.session_id
+               WHERE i.user_id=? AND i.mode='recording' AND i.status!='cancelled'
+               GROUP BY i.session_id ORDER BY i.created_at DESC LIMIT ?""",
             (user_id, limit),
         ).fetchall()
     return [dict(row) for row in rows]
@@ -422,10 +437,12 @@ def list_user_topics(user_id: str) -> list[dict]:
 def skill_statistics(user_id: str) -> list[dict]:
     with connection() as db:
         rows = db.execute(
-            """SELECT COALESCE(NULLIF(topic,''),'general') AS topic,
-               ROUND(AVG(score),1) AS score,COUNT(*) AS answers
-               FROM answers WHERE user_id=? AND relevance!='mismatch'
-               GROUP BY COALESCE(NULLIF(topic,''),'general')
+            """SELECT COALESCE(NULLIF(a.topic,''),'general') AS topic,
+               ROUND(AVG(a.score),1) AS score,COUNT(*) AS answers
+               FROM answers a JOIN interviews i ON i.session_id=a.session_id
+               WHERE a.user_id=? AND a.relevance!='mismatch'
+               AND i.mode!='recording' AND i.status!='cancelled'
+               GROUP BY COALESCE(NULLIF(a.topic,''),'general')
                ORDER BY answers DESC,score DESC""",
             (user_id,),
         ).fetchall()

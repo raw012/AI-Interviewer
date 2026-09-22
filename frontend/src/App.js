@@ -74,7 +74,7 @@ function App() {
   const [resumeBusy, setResumeBusy] = useState(false);
   const [recordingFile, setRecordingFile] = useState(null);
   const [reviewBusy, setReviewBusy] = useState(false);
-  const [dashboardData, setDashboardData] = useState({ skills: [], memories: [], interviews: [], summary: {} });
+  const [dashboardData, setDashboardData] = useState({ skills: [], memories: [], interviews: [], recording_reviews: [], summary: {} });
   const [customTopic, setCustomTopic] = useState({ name: "", description: "" });
   const [topicBusy, setTopicBusy] = useState(false);
   const [keyStatus, setKeyStatus] = useState({ configured: false, masked: "", server_fallback_available: false });
@@ -639,7 +639,7 @@ function App() {
           </header>
           <section className="metric-grid">
             <article><strong>{dashboardData.summary.interviews || 0}</strong><span>Interviews</span></article>
-            <article><strong>{dashboardData.summary.active_memories || 0}</strong><span>Active memories</span></article>
+            <article><strong>{dashboardData.summary.recording_reviews || 0}</strong><span>Recording reviews</span></article>
             <article><strong>{dashboardData.summary.strong_points || 0}</strong><span>Demonstrated strengths</span></article>
             <article><strong>{dashboardData.summary.weak_points || 0}</strong><span>Areas to revisit</span></article>
           </section>
@@ -683,6 +683,19 @@ function App() {
               {dashboardData.interviews.length === 0 && <p className="empty-note">No interview history yet.</p>}
             </div>
           </section>
+          {dashboardData.recording_reviews?.length > 0 && (
+            <section className="dashboard-card history-card review-history-card">
+              <div className="card-heading"><div><h2>Recording reviews</h2><p>Imported recordings are kept separate and do not count as practice interviews or profile scores.</p></div></div>
+              <div className="history-list">
+                {dashboardData.recording_reviews.map((review) => (
+                  <details key={review.session_id}>
+                    <summary><div><strong>Recording review</strong><span>{new Date(review.created_at).toLocaleString()} · {review.questions_answered} answers identified</span></div><b>{review.overall_score == null ? "Reviewed" : `${review.overall_score}%`}</b></summary>
+                    <div className="history-context"><strong>Review summary</strong><p>{review.cumulative_summary || "No summary was generated."}</p></div>
+                  </details>
+                ))}
+              </div>
+            </section>
+          )}
         </main>
       </div>
     );

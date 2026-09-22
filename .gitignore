@@ -2,3 +2,15 @@ __pycache__/
 *.pyc
 .DS_Store
 .env
+backend/data/
+backend/uploads/
+backend/videos/
+backend/.venv/
+backend/venv/lib/python*/site-packages/pypdf*/
+backend/venv/lib/python*/site-packages/cryptography*/
+backend/venv/lib/python*/site-packages/cffi*/
+backend/venv/lib/python*/site-packages/pycparser*/
+backend/venv/lib/python*/site-packages/_cffi_backend*
+backend/venv/bin/cffi-gen-src
+frontend/node_modules/
+frontend/build/

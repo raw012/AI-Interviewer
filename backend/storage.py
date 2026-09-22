@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import secrets
 import sqlite3
@@ -131,12 +132,29 @@ def init_db() -> None:
                 PRIMARY KEY(user_id, provider)
             );
 
+            CREATE TABLE IF NOT EXISTS profile_samples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                dimension TEXT NOT NULL,
+                score REAL NOT NULL,
+                evidence TEXT NOT NULL,
+                is_demo INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_answers_user_topic
                 ON answers(user_id, topic, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_memory_user_status
                 ON memory_items(user_id, status, next_review_at);
             """
         )
+        answer_columns = {
+            row["name"] for row in db.execute("PRAGMA table_info(answers)").fetchall()
+        }
+        if "dimension_scores" not in answer_columns:
+            db.execute(
+                "ALTER TABLE answers ADD COLUMN dimension_scores TEXT NOT NULL DEFAULT '{}'"
+            )
 
 
 def _password_hash(password: str, salt: bytes | None = None) -> str:
@@ -253,11 +271,13 @@ def save_answer(user_id: str, session_id: str, entry: dict, topic: str) -> int:
     with connection() as db:
         cursor = db.execute(
             """INSERT INTO answers(session_id,user_id,question_number,question,answer,topic,
-               score,strengths,improvements,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+               score,strengths,improvements,dimension_scores,created_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 session_id, user_id, entry["question_number"], entry["question"],
                 entry["transcript"], topic, float(evaluation.get("score", 0)),
                 str(evaluation.get("strengths", "")), str(evaluation.get("improvements", "")),
+                json.dumps(evaluation.get("dimension_scores", {})),
                 now_iso(),
             ),
         )
@@ -447,6 +467,103 @@ def skill_statistics(user_id: str) -> list[dict]:
             (user_id,),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+PROFILE_DIMENSIONS = {
+    "technical_depth": "Technical Depth",
+    "communication": "Communication",
+    "structured_thinking": "Structured Thinking",
+    "problem_solving": "Problem Solving",
+    "project_articulation": "Project Articulation",
+    "adaptability": "Adaptability",
+}
+
+
+def profile_dimension_statistics(user_id: str) -> dict:
+    values: dict[str, list[float]] = {key: [] for key in PROFILE_DIMENSIONS}
+    evidence: list[dict] = []
+    with connection() as db:
+        answer_rows = db.execute(
+            """SELECT a.dimension_scores,a.question,a.created_at,i.session_id
+               FROM answers a JOIN interviews i ON i.session_id=a.session_id
+               WHERE a.user_id=? AND a.relevance!='mismatch'
+               AND i.mode!='recording' AND i.status!='cancelled'
+               ORDER BY a.created_at DESC LIMIT 30""",
+            (user_id,),
+        ).fetchall()
+        sample_rows = db.execute(
+            """SELECT dimension,score,evidence,is_demo,created_at FROM profile_samples
+               WHERE user_id=? ORDER BY created_at DESC""",
+            (user_id,),
+        ).fetchall()
+
+    for row in answer_rows:
+        try:
+            scores = json.loads(row["dimension_scores"] or "{}")
+        except json.JSONDecodeError:
+            scores = {}
+        for key, score in scores.items():
+            if key in values and isinstance(score, (int, float)):
+                values[key].append(float(score))
+    for row in sample_rows:
+        if row["dimension"] in values:
+            values[row["dimension"]].append(float(row["score"]))
+            evidence.append(
+                {
+                    "dimension": row["dimension"],
+                    "evidence": row["evidence"],
+                    "score": row["score"],
+                    "is_demo": bool(row["is_demo"]),
+                    "created_at": row["created_at"],
+                }
+            )
+
+    dimensions = [
+        {
+            "key": key,
+            "name": name,
+            "score": round(sum(values[key]) / len(values[key]), 1) if values[key] else None,
+            "samples": len(values[key]),
+        }
+        for key, name in PROFILE_DIMENSIONS.items()
+    ]
+    return {
+        "dimensions": dimensions,
+        "evidence": evidence,
+        "has_demo_data": any(item["is_demo"] for item in evidence),
+    }
+
+
+def seed_demo_profile(user_id: str) -> int:
+    demo = [
+        ("technical_depth", 74, "Explains core concepts accurately and identifies meaningful engineering trade-offs."),
+        ("communication", 68, "Communicates the main idea clearly, but examples could be more concise and specific."),
+        ("structured_thinking", 81, "Breaks broad questions into assumptions, approach, trade-offs, and conclusion."),
+        ("problem_solving", 76, "Uses constraints and failure modes to narrow down practical solutions."),
+        ("project_articulation", 63, "Describes responsibilities well; impact and personal contribution need stronger evidence."),
+        ("adaptability", 72, "Responds constructively to follow-up questions and adjusts the answer when challenged."),
+    ]
+    with connection() as db:
+        existing = db.execute(
+            "SELECT COUNT(*) AS count FROM profile_samples WHERE user_id=? AND is_demo=1",
+            (user_id,),
+        ).fetchone()["count"]
+        if existing:
+            return 0
+        db.executemany(
+            """INSERT INTO profile_samples(user_id,dimension,score,evidence,is_demo,created_at)
+               VALUES(?,?,?,?,1,?)""",
+            [(user_id, dimension, score, evidence, now_iso()) for dimension, score, evidence in demo],
+        )
+    return len(demo)
+
+
+def delete_demo_profile(user_id: str) -> int:
+    with connection() as db:
+        result = db.execute(
+            "DELETE FROM profile_samples WHERE user_id=? AND is_demo=1", (user_id,)
+        )
+    return result.rowcount
 
 
 def save_api_key(user_id: str, provider: str, api_key: str) -> None:

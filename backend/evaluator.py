@@ -68,12 +68,22 @@ Respond ONLY with valid JSON, no other text:
   "improvements": "List 1-2 areas for improvement",
   "weak_points": ["Specific knowledge gap evidenced by this answer"],
   "strong_points": ["Specific demonstrated strength"],
-  "detected_topic": "Most specific knowledge area"
+  "detected_topic": "Most specific knowledge area",
+  "dimension_scores": {{
+    "technical_depth": 75,
+    "communication": 75,
+    "structured_thinking": 75,
+    "problem_solving": 75,
+    "project_articulation": 75,
+    "adaptability": 75
+  }}
 }}
 
 Do not label a topic as a knowledge weakness merely because the candidate chose
 not to answer. User relevance feedback will separately decide whether the
 question matched the intended interview.
+Score each profile dimension from 0 to 100 only when this answer provides
+evidence. Omit dimensions that cannot reasonably be observed from this answer.
 """
 
     response = client.chat.completions.create(
@@ -93,6 +103,7 @@ question matched the intended interview.
             "weak_points": [],
             "strong_points": [],
             "detected_topic": topic,
+            "dimension_scores": {},
         }
 
 

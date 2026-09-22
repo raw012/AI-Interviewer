@@ -24,6 +24,7 @@ from storage import (
     create_interview,
     create_user_topic,
     delete_api_key,
+    delete_demo_profile,
     create_user,
     delete_resume,
     init_db,
@@ -33,12 +34,14 @@ from storage import (
     list_recording_reviews,
     list_user_topics,
     memory_context,
+    profile_dimension_statistics,
     recent_questions,
     resume_for_user,
     save_answer,
     save_api_key,
     save_question_feedback,
     save_resume,
+    seed_demo_profile,
     skill_statistics,
     update_interview_summary as persist_interview_summary,
     upsert_memory,
@@ -266,6 +269,7 @@ def dashboard(user: dict = Depends(current_user)) -> dict:
     recording_reviews = list_recording_reviews(user["id"])
     return {
         "skills": skills,
+        "profile": profile_dimension_statistics(user["id"]),
         "memories": memories,
         "interviews": interviews,
         "recording_reviews": recording_reviews,
@@ -276,6 +280,22 @@ def dashboard(user: dict = Depends(current_user)) -> dict:
             "weak_points": sum(1 for item in memories if item["kind"] == "weak_point"),
             "strong_points": sum(1 for item in memories if item["kind"] == "strong_point"),
         },
+    }
+
+
+@app.post("/profile/demo")
+def add_demo_profile(user: dict = Depends(current_user)) -> dict:
+    return {
+        "inserted": seed_demo_profile(user["id"]),
+        "profile": profile_dimension_statistics(user["id"]),
+    }
+
+
+@app.delete("/profile/demo")
+def remove_demo_profile(user: dict = Depends(current_user)) -> dict:
+    return {
+        "deleted": delete_demo_profile(user["id"]),
+        "profile": profile_dimension_statistics(user["id"]),
     }
 
 

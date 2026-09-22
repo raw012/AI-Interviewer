@@ -209,10 +209,15 @@ button, input, textarea, select { font: inherit; }
 .radar-value { fill: rgba(10,102,194,.2); stroke: var(--blue); stroke-width: 2.3; stroke-linejoin: round; }
 .radar-label { font-size: 9px; fill: #59636d; font-weight: 650; }
 .empty-note { color: #89919a; font-size: 13px; line-height: 1.5; }
+.profile-empty { display: flex; align-items: center; justify-content: space-between; gap: 14px; border-top: 1px solid var(--gray-border); padding-top: 14px; }
+.profile-empty .btn-secondary { flex: 0 0 auto; font-size: 11px; }
+.clear-demo { display: block; margin: 8px auto 0; border: 0; background: transparent; color: var(--red); font-size: 11px; font-weight: 700; cursor: pointer; }
 .insight-columns { display: grid; grid-template-columns: 1fr; gap: 20px; }
 .insight-columns > div { border-top: 1px solid var(--gray-border); padding-top: 15px; }
 .insight-columns h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--gray-text); margin-bottom: 9px; }
 .insight-columns p { font-size: 13px; line-height: 1.45; padding: 8px 0; border-bottom: 1px solid #f0f1f2; }
+.insight-columns p strong { font-size: 11px; color: var(--blue); text-transform: uppercase; letter-spacing: .04em; }
+.insight-columns p small { margin-left: 5px; color: #a85a13; font-size: 9px; font-weight: 800; text-transform: uppercase; }
 .memory-browser, .history-card { margin-top: 18px; }
 .memory-list { display: flex; flex-direction: column; }
 .memory-row { display: grid; grid-template-columns: 100px minmax(0, 1fr) 100px; gap: 14px; align-items: start; padding: 15px 0; border-top: 1px solid #edf0f2; }

@@ -19,12 +19,12 @@ function RadarChart({ skills }) {
   const center = size / 2;
   const radius = 112;
   const axes = skills.length >= 3 ? skills : [
-    { name: "Java OOP", score: 0 },
-    { name: "Networks", score: 0 },
-    { name: "Operating Systems", score: 0 },
-    { name: "Machine Learning", score: 0 },
-    { name: "Data Structures", score: 0 },
-    { name: "Deep Learning", score: 0 },
+    { name: "Technical Depth", score: 0 },
+    { name: "Communication", score: 0 },
+    { name: "Structured Thinking", score: 0 },
+    { name: "Problem Solving", score: 0 },
+    { name: "Project Articulation", score: 0 },
+    { name: "Adaptability", score: 0 },
   ];
   const point = (index, value = 100) => {
     const angle = -Math.PI / 2 + (index * Math.PI * 2) / axes.length;
@@ -74,7 +74,7 @@ function App() {
   const [resumeBusy, setResumeBusy] = useState(false);
   const [recordingFile, setRecordingFile] = useState(null);
   const [reviewBusy, setReviewBusy] = useState(false);
-  const [dashboardData, setDashboardData] = useState({ skills: [], memories: [], interviews: [], recording_reviews: [], summary: {} });
+  const [dashboardData, setDashboardData] = useState({ skills: [], profile: { dimensions: [], evidence: [], has_demo_data: false }, memories: [], interviews: [], recording_reviews: [], summary: {} });
   const [customTopic, setCustomTopic] = useState({ name: "", description: "" });
   const [topicBusy, setTopicBusy] = useState(false);
   const [keyStatus, setKeyStatus] = useState({ configured: false, masked: "", server_fallback_available: false });
@@ -186,6 +186,16 @@ function App() {
       alert(error.message);
     } finally {
       setTopicBusy(false);
+    }
+  };
+
+  const updateDemoProfile = async (method) => {
+    try {
+      const response = await apiRequest("/profile/demo", token, { method });
+      const result = await response.json();
+      setDashboardData((current) => ({ ...current, profile: result.profile }));
+    } catch (error) {
+      alert(error.message);
     }
   };
 
@@ -621,11 +631,9 @@ function App() {
   }
 
   if (page === "dashboard") {
-    const skillScores = new Map(dashboardData.skills.map((skill) => [skill.topic, skill]));
-    const radarSkills = topics.slice(0, 10).map((item) => ({
-      name: item.name,
-      score: Number(skillScores.get(item.key)?.score || 0),
-    }));
+    const profileDimensions = dashboardData.profile?.dimensions || [];
+    const radarSkills = profileDimensions.map((item) => ({ name: item.name, score: Number(item.score || 0) }));
+    const profileEvidence = dashboardData.profile?.evidence || [];
     return (
       <div className="page-bg dashboard-page">
         <nav className="navbar">
@@ -645,15 +653,16 @@ function App() {
           </section>
           <section className="dashboard-grid">
             <article className="dashboard-card radar-card">
-              <div className="card-heading"><div><h2>Skill profile</h2><p>Scores are based on relevant, reviewed answers.</p></div></div>
+              <div className="card-heading"><div><h2>Candidate profile</h2><p>Cross-domain abilities inferred from your recent interview answers.</p></div>{dashboardData.profile?.has_demo_data && <span>Sample data</span>}</div>
               <RadarChart skills={radarSkills} />
-              {dashboardData.skills.length === 0 && <p className="empty-note">Complete your first interview to begin building this profile.</p>}
+              {!profileDimensions.some((item) => item.score != null) && <div className="profile-empty"><p className="empty-note">Complete your first interview to begin building a real profile, or preview the dashboard with clearly labeled sample data.</p><button className="btn-secondary" onClick={() => updateDemoProfile("POST")}>Preview sample profile</button></div>}
+              {dashboardData.profile?.has_demo_data && <button className="clear-demo" onClick={() => updateDemoProfile("DELETE")}>Clear sample profile data</button>}
             </article>
             <article className="dashboard-card strengths-card">
-              <div className="card-heading"><div><h2>Strengths and growth areas</h2><p>Evidence extracted from your answers.</p></div></div>
+              <div className="card-heading"><div><h2>Profile evidence</h2><p>Why the coach currently sees you this way.</p></div></div>
               <div className="insight-columns">
-                <div><h3>Strengths</h3>{dashboardData.memories.filter((item) => item.kind === "strong_point").slice(0, 5).map((item) => <p key={item.id}>✓ {item.content}</p>)}{!dashboardData.memories.some((item) => item.kind === "strong_point") && <span className="empty-note">No verified strengths yet.</span>}</div>
-                <div><h3>Needs attention</h3>{dashboardData.memories.filter((item) => item.kind === "weak_point").slice(0, 5).map((item) => <p key={item.id}>↗ {item.content}</p>)}{!dashboardData.memories.some((item) => item.kind === "weak_point") && <span className="empty-note">No verified gaps yet.</span>}</div>
+                <div><h3>Current signals</h3>{profileEvidence.slice(0, 6).map((item, index) => <p key={`${item.dimension}-${index}`}><strong>{profileDimensions.find((dimension) => dimension.key === item.dimension)?.name || item.dimension}</strong><br />{item.evidence}{item.is_demo && <small> Sample</small>}</p>)}{profileEvidence.length === 0 && <span className="empty-note">Evidence will appear after completed interviews.</span>}</div>
+                <div><h3>Knowledge patterns</h3>{dashboardData.memories.slice(0, 5).map((item) => <p key={item.id}>{item.kind === "strong_point" ? "✓" : "↗"} {item.content}</p>)}{dashboardData.memories.length === 0 && <span className="empty-note">No verified knowledge patterns yet.</span>}</div>
               </div>
             </article>
           </section>

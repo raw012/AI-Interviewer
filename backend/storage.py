@@ -142,6 +142,13 @@ def init_db() -> None:
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS user_provider_settings (
+                user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                llm_provider TEXT NOT NULL DEFAULT 'groq',
+                transcription_provider TEXT NOT NULL DEFAULT 'groq',
+                updated_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_answers_user_topic
                 ON answers(user_id, topic, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_memory_user_status
@@ -154,6 +161,13 @@ def init_db() -> None:
         if "dimension_scores" not in answer_columns:
             db.execute(
                 "ALTER TABLE answers ADD COLUMN dimension_scores TEXT NOT NULL DEFAULT '{}'"
+            )
+        memory_columns = {
+            row["name"] for row in db.execute("PRAGMA table_info(memory_items)").fetchall()
+        }
+        if "is_demo" not in memory_columns:
+            db.execute(
+                "ALTER TABLE memory_items ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0"
             )
 
 
@@ -412,7 +426,7 @@ def list_recording_reviews(user_id: str, limit: int = 20) -> list[dict]:
 def list_memory_items(user_id: str, limit: int = 50) -> list[dict]:
     with connection() as db:
         rows = db.execute(
-            """SELECT m.id,m.kind,m.topic,m.content,m.confidence,m.times_seen,
+            """SELECT m.id,m.kind,m.topic,m.content,m.confidence,m.times_seen,m.is_demo,
                m.status,m.first_seen,m.last_seen,m.next_review_at,a.session_id,
                a.question,i.created_at AS interview_date,i.mode AS interview_mode
                FROM memory_items m
@@ -481,7 +495,6 @@ PROFILE_DIMENSIONS = {
 
 def profile_dimension_statistics(user_id: str) -> dict:
     values: dict[str, list[float]] = {key: [] for key in PROFILE_DIMENSIONS}
-    evidence: list[dict] = []
     with connection() as db:
         answer_rows = db.execute(
             """SELECT a.dimension_scores,a.question,a.created_at,i.session_id
@@ -508,15 +521,6 @@ def profile_dimension_statistics(user_id: str) -> dict:
     for row in sample_rows:
         if row["dimension"] in values:
             values[row["dimension"]].append(float(row["score"]))
-            evidence.append(
-                {
-                    "dimension": row["dimension"],
-                    "evidence": row["evidence"],
-                    "score": row["score"],
-                    "is_demo": bool(row["is_demo"]),
-                    "created_at": row["created_at"],
-                }
-            )
 
     dimensions = [
         {
@@ -529,8 +533,7 @@ def profile_dimension_statistics(user_id: str) -> dict:
     ]
     return {
         "dimensions": dimensions,
-        "evidence": evidence,
-        "has_demo_data": any(item["is_demo"] for item in evidence),
+        "has_demo_data": any(bool(row["is_demo"]) for row in sample_rows),
     }
 
 
@@ -548,14 +551,27 @@ def seed_demo_profile(user_id: str) -> int:
             "SELECT COUNT(*) AS count FROM profile_samples WHERE user_id=? AND is_demo=1",
             (user_id,),
         ).fetchone()["count"]
-        if existing:
-            return 0
+        if not existing:
+            db.executemany(
+                """INSERT INTO profile_samples(user_id,dimension,score,evidence,is_demo,created_at)
+                   VALUES(?,?,?,?,1,?)""",
+                [(user_id, dimension, score, evidence, now_iso()) for dimension, score, evidence in demo],
+            )
+        demo_memories = [
+            ("expertise", "system_design", "Shows growing expertise in breaking down ambiguous system-design problems."),
+            ("communication_pattern", "general", "Usually communicates the main idea clearly, then benefits from adding one concrete example."),
+            ("working_style", "general", "Approaches problems by identifying constraints and failure modes before choosing a solution."),
+            ("preference", "general", "Appears most comfortable with structured technical discussions and follow-up questions."),
+        ]
+        now = now_iso()
         db.executemany(
-            """INSERT INTO profile_samples(user_id,dimension,score,evidence,is_demo,created_at)
-               VALUES(?,?,?,?,1,?)""",
-            [(user_id, dimension, score, evidence, now_iso()) for dimension, score, evidence in demo],
+            """INSERT OR IGNORE INTO memory_items(
+               user_id,kind,topic,content,confidence,times_seen,status,
+               source_answer_id,first_seen,last_seen,next_review_at,is_demo)
+               VALUES(?,?,?,?,0.55,1,'active',NULL,?,?,NULL,1)""",
+            [(user_id, kind, topic, content, now, now) for kind, topic, content in demo_memories],
         )
-    return len(demo)
+    return 0 if existing else len(demo)
 
 
 def delete_demo_profile(user_id: str) -> int:
@@ -563,6 +579,7 @@ def delete_demo_profile(user_id: str) -> int:
         result = db.execute(
             "DELETE FROM profile_samples WHERE user_id=? AND is_demo=1", (user_id,)
         )
+        db.execute("DELETE FROM memory_items WHERE user_id=? AND is_demo=1", (user_id,))
     return result.rowcount
 
 
@@ -605,6 +622,31 @@ def api_key_status(user_id: str, provider: str = "groq") -> dict:
         "masked": f"••••••••{row['last_four']}" if row else "",
         "updated_at": row["updated_at"] if row else None,
     }
+
+
+def provider_settings(user_id: str) -> dict:
+    with connection() as db:
+        row = db.execute(
+            "SELECT llm_provider,transcription_provider FROM user_provider_settings WHERE user_id=?",
+            (user_id,),
+        ).fetchone()
+    return dict(row) if row else {"llm_provider": "groq", "transcription_provider": "groq"}
+
+
+def save_provider_settings(
+    user_id: str, llm_provider: str, transcription_provider: str
+) -> dict:
+    with connection() as db:
+        db.execute(
+            """INSERT INTO user_provider_settings(
+               user_id,llm_provider,transcription_provider,updated_at) VALUES(?,?,?,?)
+               ON CONFLICT(user_id) DO UPDATE SET
+               llm_provider=excluded.llm_provider,
+               transcription_provider=excluded.transcription_provider,
+               updated_at=excluded.updated_at""",
+            (user_id, llm_provider, transcription_provider, now_iso()),
+        )
+    return provider_settings(user_id)
 
 
 def delete_api_key(user_id: str, provider: str = "groq") -> bool:

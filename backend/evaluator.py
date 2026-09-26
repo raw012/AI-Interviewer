@@ -1,17 +1,11 @@
 import os
 import json
-from groq import Groq
+from providers import complete_text
 
-def get_client(api_key: str | None = None):
+def generate_followup(transcript: str, provider: str = "groq", api_key: str | None = None):
     api_key = api_key or os.getenv("GROQ_API_KEY")
     if not api_key:
-        raise ValueError("GROQ_API_KEY not found in environment")
-    return Groq(api_key=api_key)
-
-
-def generate_followup(transcript: str):
-
-    client = get_client()
+        raise ValueError("No API key configured")
 
     prompt = f"""
 You are an AI interviewer.
@@ -27,12 +21,7 @@ If behavioral, ask for example.
 Only output the question.
 """
 
-    response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    return response.choices[0].message.content.strip()
+    return complete_text(provider, api_key, prompt)
 
 
 def score_answer(
@@ -41,9 +30,11 @@ def score_answer(
     topic: str = "",
     memory_context: str = "",
     api_key: str | None = None,
+    provider: str = "groq",
 ):
-
-    client = get_client(api_key)
+    api_key = api_key or os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("No API key configured")
 
     prompt = f"""
 Score this interview answer from 0 to 100.
@@ -76,7 +67,11 @@ Respond ONLY with valid JSON, no other text:
     "problem_solving": 75,
     "project_articulation": 75,
     "adaptability": 75
-  }}
+  }},
+  "user_memories": [
+    {{"kind": "expertise", "content": "Specific expertise demonstrated by this answer"}},
+    {{"kind": "communication_pattern", "content": "Stable communication behavior evidenced here"}}
+  ]
 }}
 
 Do not label a topic as a knowledge weakness merely because the candidate chose
@@ -84,16 +79,14 @@ not to answer. User relevance feedback will separately decide whether the
 question matched the intended interview.
 Score each profile dimension from 0 to 100 only when this answer provides
 evidence. Omit dimensions that cannot reasonably be observed from this answer.
+Only include durable user_memories supported by the answer. Allowed kinds are
+expertise, communication_pattern, working_style, and preference. Return an
+empty list when there is no durable personal signal.
 """
-
-    response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "user", "content": prompt}],
-    )
 
     import json
     try:
-        return json.loads(response.choices[0].message.content.strip())
+        return json.loads(complete_text(provider, api_key, prompt))
     except json.JSONDecodeError:
         # Fallback if Groq doesn't return valid JSON
         return {
@@ -104,6 +97,7 @@ evidence. Omit dimensions that cannot reasonably be observed from this answer.
             "strong_points": [],
             "detected_topic": topic,
             "dimension_scores": {},
+            "user_memories": [],
         }
 
 
@@ -113,9 +107,12 @@ def update_interview_summary(
     answer: str,
     evaluation: dict,
     api_key: str | None = None,
+    provider: str = "groq",
 ) -> str:
     """Keep a compact, cumulative memory of the interview."""
-    client = get_client(api_key)
+    api_key = api_key or os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("No API key configured")
 
     prompt = f"""
 You maintain compact context for a long-running technical interview.
@@ -144,19 +141,17 @@ Keep it concise (maximum 500 words). Do not reproduce the full transcript.
 Only output the updated summary.
 """
 
-    response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    return response.choices[0].message.content.strip()
+    return complete_text(provider, api_key, prompt)
 
 
 def analyze_recording(
-    transcript: str, memory_context: str = "", api_key: str | None = None
+    transcript: str, memory_context: str = "", api_key: str | None = None,
+    provider: str = "groq",
 ) -> dict:
     """Turn a real interview transcript into a structured retrospective."""
-    client = get_client(api_key)
+    api_key = api_key or os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("No API key configured")
     prompt = f"""
 You are an interview coach reviewing a transcript of a real interview.
 The transcript may contain both interviewer and candidate speech and may not
@@ -188,13 +183,8 @@ Return ONLY valid JSON with this shape:
 Use scores from 0 to 100. Do not invent content that is absent. If a question
 or answer is unclear, say so. Include at most 20 substantive Q&A pairs.
 """
-    response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-    )
     try:
-        result = json.loads(response.choices[0].message.content.strip())
+        result = json.loads(complete_text(provider, api_key, prompt))
     except (json.JSONDecodeError, AttributeError) as exc:
         raise ValueError("The recording analysis did not return valid JSON") from exc
     if not isinstance(result.get("questions"), list) or not result["questions"]:

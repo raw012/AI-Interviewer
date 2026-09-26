@@ -13,7 +13,8 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pypdf import PdfReader
 
-from evaluator import analyze_recording, get_client, score_answer, update_interview_summary
+from evaluator import analyze_recording, score_answer, update_interview_summary
+from providers import PROVIDERS, complete_text, test_provider
 from speech import extract_audio, transcribe_audio
 from storage import (
     api_key_for_user,
@@ -35,11 +36,13 @@ from storage import (
     list_user_topics,
     memory_context,
     profile_dimension_statistics,
+    provider_settings,
     recent_questions,
     resume_for_user,
     save_answer,
     save_api_key,
     save_question_feedback,
+    save_provider_settings,
     save_resume,
     seed_demo_profile,
     skill_statistics,
@@ -110,16 +113,26 @@ def topic_for_user(user_id: str, key: str) -> dict | None:
     return next((item for item in topic_catalog(user_id) if item["key"] == key), None)
 
 
-def resolved_api_key(user_id: str) -> str:
-    personal_key = api_key_for_user(user_id)
-    environment_key = os.getenv("GROQ_API_KEY", "").strip()
+def resolved_api_key(user_id: str, provider: str = "groq") -> str:
+    personal_key = api_key_for_user(user_id, provider)
+    environment_key = os.getenv(f"{provider.upper()}_API_KEY", "").strip()
     key = personal_key or environment_key
     if not key or key == "paste_your_new_groq_api_key_here":
         raise HTTPException(
             status_code=400,
-            detail="Configure a Groq API key in API Settings before using AI features",
+            detail=f"Configure a {PROVIDERS[provider]['name']} API key in API Settings",
         )
     return key
+
+
+def provider_runtime(user_id: str, capability: str) -> tuple[str, str]:
+    settings = provider_settings(user_id)
+    provider = settings[
+        "transcription_provider" if capability == "transcription" else "llm_provider"
+    ]
+    if provider not in PROVIDERS or not PROVIDERS[provider].get(capability if capability == "transcription" else "chat"):
+        raise HTTPException(status_code=400, detail=f"Selected provider cannot perform {capability}")
+    return provider, resolved_api_key(user_id, provider)
 
 
 def utc_now() -> datetime:
@@ -309,6 +322,74 @@ def get_api_key_settings(user: dict = Depends(current_user)) -> dict:
     return status
 
 
+@app.get("/settings/providers")
+def get_provider_settings(user: dict = Depends(current_user)) -> dict:
+    active = provider_settings(user["id"])
+    providers = []
+    for key, metadata in PROVIDERS.items():
+        status = api_key_status(user["id"], key)
+        environment_key = os.getenv(f"{key.upper()}_API_KEY", "").strip()
+        providers.append(
+            {
+                "key": key,
+                **metadata,
+                **status,
+                "server_fallback_available": bool(environment_key),
+            }
+        )
+    return {"providers": providers, **active}
+
+
+@app.put("/settings/providers/{provider}/key")
+def update_provider_key(
+    provider: str, request: dict, user: dict = Depends(current_user)
+) -> dict:
+    if provider not in PROVIDERS:
+        raise HTTPException(status_code=404, detail="Unsupported provider")
+    api_key = str(request.get("api_key", "")).strip()
+    if len(api_key) < 12:
+        raise HTTPException(status_code=400, detail="Enter a valid API key")
+    save_api_key(user["id"], provider, api_key)
+    return api_key_status(user["id"], provider)
+
+
+@app.post("/settings/providers/{provider}/test")
+def test_provider_key(
+    provider: str, request: dict, user: dict = Depends(current_user)
+) -> dict:
+    if provider not in PROVIDERS:
+        raise HTTPException(status_code=404, detail="Unsupported provider")
+    supplied = str(request.get("api_key", "")).strip()
+    api_key = supplied or resolved_api_key(user["id"], provider)
+    try:
+        test_provider(provider, api_key)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400, detail=f"The {PROVIDERS[provider]['name']} key could not be verified"
+        ) from exc
+    return {"ok": True, "message": "Connection successful"}
+
+
+@app.delete("/settings/providers/{provider}/key")
+def remove_provider_key(provider: str, user: dict = Depends(current_user)) -> dict:
+    if provider not in PROVIDERS:
+        raise HTTPException(status_code=404, detail="Unsupported provider")
+    return {"ok": delete_api_key(user["id"], provider)}
+
+
+@app.put("/settings/providers/active")
+def update_active_providers(
+    request: dict, user: dict = Depends(current_user)
+) -> dict:
+    llm_provider = str(request.get("llm_provider", "groq"))
+    transcription_provider = str(request.get("transcription_provider", "groq"))
+    if llm_provider not in PROVIDERS or not PROVIDERS[llm_provider]["chat"]:
+        raise HTTPException(status_code=400, detail="Invalid interview intelligence provider")
+    if transcription_provider not in PROVIDERS or not PROVIDERS[transcription_provider]["transcription"]:
+        raise HTTPException(status_code=400, detail="Invalid transcription provider")
+    return save_provider_settings(user["id"], llm_provider, transcription_provider)
+
+
 @app.put("/settings/api-key")
 def update_api_key(request: dict, user: dict = Depends(current_user)) -> dict:
     api_key = str(request.get("api_key", "")).strip()
@@ -323,7 +404,7 @@ def test_api_key(request: dict, user: dict = Depends(current_user)) -> dict:
     supplied = str(request.get("api_key", "")).strip()
     api_key = supplied or resolved_api_key(user["id"])
     try:
-        get_client(api_key).models.list()
+        test_provider("groq", api_key)
     except Exception as exc:
         raise HTTPException(status_code=400, detail="The Groq API key could not be verified") from exc
     return {"ok": True, "message": "Connection successful"}
@@ -356,9 +437,12 @@ async def recording_review(
 
     try:
         audio_path = media_path if suffix in AUDIO_SUFFIXES else extract_audio(media_path)
-        api_key = resolved_api_key(user["id"])
-        transcript = transcribe_audio(audio_path, api_key)
-        analysis = analyze_recording(transcript, memory_context(user["id"]), api_key)
+        transcription_provider, transcription_key = provider_runtime(user["id"], "transcription")
+        llm_provider, llm_key = provider_runtime(user["id"], "llm")
+        transcript = transcribe_audio(audio_path, transcription_key, transcription_provider)
+        analysis = analyze_recording(
+            transcript, memory_context(user["id"]), llm_key, llm_provider
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Recording review failed: {exc}") from exc
 
@@ -500,13 +584,15 @@ async def upload_answer(
         with open(video_path, "wb") as output:
             output.write(await file.read())
         audio_path = extract_audio(video_path)
-        api_key = resolved_api_key(user["id"])
-        transcript = transcribe_audio(audio_path, api_key)
+        transcription_provider, transcription_key = provider_runtime(user["id"], "transcription")
+        llm_provider, llm_key = provider_runtime(user["id"], "llm")
+        transcript = transcribe_audio(audio_path, transcription_key, transcription_provider)
 
         question = session["current_question"]
         cross_session_memory = memory_context(user["id"], session["topic"])
         evaluation = score_answer(
-            question, transcript, session["topic"], cross_session_memory, api_key
+            question, transcript, session["topic"], cross_session_memory, llm_key,
+            llm_provider,
         )
 
         question_number = session["current_question_index"] + 1
@@ -521,7 +607,8 @@ async def upload_answer(
 
         try:
             session["cumulative_summary"] = update_interview_summary(
-                session["cumulative_summary"], question, transcript, evaluation, api_key
+                session["cumulative_summary"], question, transcript, evaluation,
+                llm_key, llm_provider,
             )
         except Exception as summary_error:
             print(f"Error updating interview summary: {summary_error}")
@@ -544,6 +631,14 @@ async def upload_answer(
             upsert_memory(user["id"], "weak_point", detected_topic, str(point), answer_id)
         for point in evaluation.get("strong_points", []):
             upsert_memory(user["id"], "strong_point", detected_topic, str(point), answer_id)
+        for learned in evaluation.get("user_memories", []):
+            if not isinstance(learned, dict):
+                continue
+            kind = str(learned.get("kind", ""))
+            if kind in {"expertise", "communication_pattern", "working_style", "preference"}:
+                upsert_memory(
+                    user["id"], kind, detected_topic, str(learned.get("content", "")), answer_id
+                )
 
         if finish or seconds_remaining(session) <= 0:
             mark_session_complete(session)
@@ -625,11 +720,8 @@ Requirements:
 - Keep it conversational and answerable aloud in 1-3 sentences.
 - Only output the question.
 """
-    response = get_client(resolved_api_key(session["user_id"])).chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.choices[0].message.content.strip()
+    provider, api_key = provider_runtime(session["user_id"], "llm")
+    return complete_text(provider, api_key, prompt)
 
 
 def mark_session_complete(session: dict) -> float:

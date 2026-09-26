@@ -6,6 +6,9 @@ backend/data/
 backend/uploads/
 backend/videos/
 backend/.venv/
+backend/venv/
+._*
+_deploy/
 backend/venv/lib/python*/site-packages/pypdf*/
 backend/venv/lib/python*/site-packages/cryptography*/
 backend/venv/lib/python*/site-packages/cffi*/

@@ -1,7 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./App.css";
 
-const API_URL = "http://localhost:8000";
+const API_URL = process.env.REACT_APP_API_URL ||
+  (process.env.NODE_ENV === "development" ? "http://localhost:8000" : `${window.location.origin}/api`);
+const MEMORY_LABELS = {
+  expertise: "Area of expertise",
+  communication_pattern: "Communication pattern",
+  working_style: "Working style",
+  preference: "Interview preference",
+  strong_point: "Knowledge strength",
+  weak_point: "Growth area",
+};
 
 async function apiRequest(path, token, options = {}) {
   const headers = new Headers(options.headers || {});
@@ -74,13 +83,13 @@ function App() {
   const [resumeBusy, setResumeBusy] = useState(false);
   const [recordingFile, setRecordingFile] = useState(null);
   const [reviewBusy, setReviewBusy] = useState(false);
-  const [dashboardData, setDashboardData] = useState({ skills: [], profile: { dimensions: [], evidence: [], has_demo_data: false }, memories: [], interviews: [], recording_reviews: [], summary: {} });
+  const [dashboardData, setDashboardData] = useState({ skills: [], profile: { dimensions: [], has_demo_data: false }, memories: [], interviews: [], recording_reviews: [], summary: {} });
   const [customTopic, setCustomTopic] = useState({ name: "", description: "" });
   const [topicBusy, setTopicBusy] = useState(false);
-  const [keyStatus, setKeyStatus] = useState({ configured: false, masked: "", server_fallback_available: false });
-  const [keyInput, setKeyInput] = useState("");
-  const [keyBusy, setKeyBusy] = useState(false);
-  const [keyMessage, setKeyMessage] = useState("");
+  const [providerConfig, setProviderConfig] = useState({ providers: [], llm_provider: "groq", transcription_provider: "groq" });
+  const [providerInputs, setProviderInputs] = useState({});
+  const [providerBusy, setProviderBusy] = useState("");
+  const [providerMessages, setProviderMessages] = useState({});
   const [durationMinutes, setDurationMinutes] = useState(30);
 
   const [recording, setRecording] = useState(false);
@@ -157,14 +166,14 @@ function App() {
       apiRequest("/resume/status", token).then((response) => response.json()),
       apiRequest("/memory", token).then((response) => response.json()),
       apiRequest("/dashboard", token).then((response) => response.json()),
-      apiRequest("/settings/api-key", token).then((response) => response.json()),
+      apiRequest("/settings/providers", token).then((response) => response.json()),
     ])
-      .then(([topicData, resumeData, memoryData, dashboard, apiKeyData]) => {
+      .then(([topicData, resumeData, memoryData, dashboard, providers]) => {
         setTopics(topicData.topics || []);
         setResumeStatus(resumeData);
         setMemoryItems(memoryData.items || []);
         setDashboardData(dashboard);
-        setKeyStatus(apiKeyData);
+        setProviderConfig(providers);
       })
       .catch((error) => console.error("Setup data error:", error));
   }, [token]);
@@ -199,56 +208,71 @@ function App() {
     }
   };
 
-  const saveApiKey = async (event) => {
-    event.preventDefault();
-    setKeyBusy(true);
-    setKeyMessage("");
+  const saveProviderKey = async (provider) => {
+    setProviderBusy(provider);
+    setProviderMessages((current) => ({ ...current, [provider]: "" }));
     try {
-      const response = await apiRequest("/settings/api-key", token, {
+      await apiRequest(`/settings/providers/${provider}/key`, token, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: keyInput }),
+        body: JSON.stringify({ api_key: providerInputs[provider] || "" }),
       });
-      setKeyStatus(await response.json());
-      setKeyInput("");
-      setKeyMessage("API key saved securely.");
+      const refreshed = await apiRequest("/settings/providers", token);
+      setProviderConfig(await refreshed.json());
+      setProviderInputs((current) => ({ ...current, [provider]: "" }));
+      setProviderMessages((current) => ({ ...current, [provider]: "API key saved securely." }));
     } catch (error) {
-      setKeyMessage(error.message);
+      setProviderMessages((current) => ({ ...current, [provider]: error.message }));
     } finally {
-      setKeyBusy(false);
+      setProviderBusy("");
     }
   };
 
-  const testApiKey = async () => {
-    setKeyBusy(true);
-    setKeyMessage("");
+  const testProviderKey = async (provider) => {
+    setProviderBusy(provider);
+    setProviderMessages((current) => ({ ...current, [provider]: "" }));
     try {
-      const response = await apiRequest("/settings/api-key/test", token, {
+      const response = await apiRequest(`/settings/providers/${provider}/test`, token, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: keyInput }),
+        body: JSON.stringify({ api_key: providerInputs[provider] || "" }),
       });
-      setKeyMessage((await response.json()).message);
+      const result = await response.json();
+      setProviderMessages((current) => ({ ...current, [provider]: result.message }));
     } catch (error) {
-      setKeyMessage(error.message);
+      setProviderMessages((current) => ({ ...current, [provider]: error.message }));
     } finally {
-      setKeyBusy(false);
+      setProviderBusy("");
     }
   };
 
-  const removeApiKey = async () => {
-    if (!window.confirm("Remove your saved Groq API key?")) return;
-    setKeyBusy(true);
+  const removeProviderKey = async (provider) => {
+    if (!window.confirm("Remove this saved API key?")) return;
+    setProviderBusy(provider);
     try {
-      await apiRequest("/settings/api-key", token, { method: "DELETE" });
-      const response = await apiRequest("/settings/api-key", token);
-      setKeyStatus(await response.json());
-      setKeyInput("");
-      setKeyMessage("Saved API key removed.");
+      await apiRequest(`/settings/providers/${provider}/key`, token, { method: "DELETE" });
+      const response = await apiRequest("/settings/providers", token);
+      setProviderConfig(await response.json());
+      setProviderInputs((current) => ({ ...current, [provider]: "" }));
+      setProviderMessages((current) => ({ ...current, [provider]: "Saved API key removed." }));
     } catch (error) {
-      setKeyMessage(error.message);
+      setProviderMessages((current) => ({ ...current, [provider]: error.message }));
     } finally {
-      setKeyBusy(false);
+      setProviderBusy("");
+    }
+  };
+
+  const setActiveProviders = async (field, value) => {
+    const next = { ...providerConfig, [field]: value };
+    setProviderConfig(next);
+    try {
+      await apiRequest("/settings/providers/active", token, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ llm_provider: next.llm_provider, transcription_provider: next.transcription_provider }),
+      });
+    } catch (error) {
+      alert(error.message);
     }
   };
 
@@ -614,17 +638,31 @@ function App() {
         </nav>
         <main className="settings-container">
           <header><p className="dashboard-eyebrow">SETTINGS</p><h1>API settings</h1><p>Connect your own AI provider key for interviews, scoring, transcription, and recording review.</p></header>
-          <section className="settings-card">
-            <div className="provider-heading"><div className="provider-logo">G</div><div><h2>Groq</h2><p>Used for Llama interview intelligence and Whisper transcription.</p></div><span className={keyStatus.configured || keyStatus.server_fallback_available ? "connected" : "missing"}>{keyStatus.configured ? "Personal key saved" : keyStatus.server_fallback_available ? "Using server fallback" : "Not configured"}</span></div>
-            <div className="key-security-note"><strong>Your key stays private.</strong><p>It is encrypted before being stored in the local database. The complete key is never returned to the browser or shown again.</p></div>
-            {keyStatus.configured && <div className="saved-key"><span>Saved key</span><code>{keyStatus.masked}</code><small>Updated {new Date(keyStatus.updated_at).toLocaleString()}</small></div>}
-            <form className="key-form" onSubmit={saveApiKey}>
-              <label>{keyStatus.configured ? "Replace API key" : "Groq API key"}<input type="password" autoComplete="off" value={keyInput} onChange={(event) => setKeyInput(event.target.value)} placeholder="gsk_…" required /></label>
-              <p>Get a key from the Groq Console. It should begin with <code>gsk_</code>.</p>
-              <div className="key-actions"><button type="button" className="btn-secondary" onClick={testApiKey} disabled={keyBusy || (!keyInput && !keyStatus.configured && !keyStatus.server_fallback_available)}>Test connection</button><button type="submit" className="btn-primary" disabled={keyBusy || !keyInput}>{keyBusy ? "Please wait…" : "Save key"}</button>{keyStatus.configured && <button type="button" className="btn-danger-text" onClick={removeApiKey} disabled={keyBusy}>Remove saved key</button>}</div>
-            </form>
-            {keyMessage && <div className={`key-message${keyMessage.toLowerCase().includes("successful") || keyMessage.toLowerCase().includes("saved") ? " success" : ""}`}>{keyMessage}</div>}
+          <section className="settings-card provider-routing">
+            <div className="card-heading"><div><h2>Active providers</h2><p>Choose one provider for interview intelligence and one for speech-to-text.</p></div></div>
+            <div className="provider-selects">
+              <label>Interview intelligence<select value={providerConfig.llm_provider} onChange={(event) => setActiveProviders("llm_provider", event.target.value)}>{providerConfig.providers.filter((item) => item.chat).map((item) => <option key={item.key} value={item.key}>{item.name} · {item.model}</option>)}</select></label>
+              <label>Audio transcription<select value={providerConfig.transcription_provider} onChange={(event) => setActiveProviders("transcription_provider", event.target.value)}>{providerConfig.providers.filter((item) => item.transcription).map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label>
+            </div>
           </section>
+          <div className="key-security-note"><strong>Your keys stay private.</strong><p>Each key is encrypted before local database storage. Complete keys are never returned to the browser. Anthropic and Gemini can power interview intelligence; transcription currently supports Groq and OpenAI.</p></div>
+          <div className="provider-grid">
+            {providerConfig.providers.map((provider) => {
+              const connected = provider.configured || provider.server_fallback_available;
+              const message = providerMessages[provider.key] || "";
+              return (
+                <section className="settings-card provider-card" key={provider.key}>
+                  <div className="provider-heading"><div className={`provider-logo ${provider.key}`}>{provider.name.charAt(0)}</div><div><h2>{provider.name}</h2><p>{provider.chat ? `Interview model: ${provider.model}` : ""}{provider.transcription ? " · Speech-to-text" : ""}</p></div><span className={connected ? "connected" : "missing"}>{provider.configured ? "Personal key saved" : provider.server_fallback_available ? "Server fallback" : "Not configured"}</span></div>
+                  {provider.configured && <div className="saved-key"><span>Saved key</span><code>{provider.masked}</code><small>{provider.updated_at ? new Date(provider.updated_at).toLocaleDateString() : ""}</small></div>}
+                  <div className="key-form">
+                    <label>{provider.configured ? "Replace API key" : "API key"}<input type="password" autoComplete="off" value={providerInputs[provider.key] || ""} onChange={(event) => setProviderInputs((current) => ({ ...current, [provider.key]: event.target.value }))} placeholder="Paste provider key" /></label>
+                    <div className="key-actions"><button type="button" className="btn-secondary" onClick={() => testProviderKey(provider.key)} disabled={providerBusy === provider.key || (!providerInputs[provider.key] && !connected)}>Test</button><button type="button" className="btn-primary" onClick={() => saveProviderKey(provider.key)} disabled={providerBusy === provider.key || !providerInputs[provider.key]}>{providerBusy === provider.key ? "Please wait…" : "Save"}</button>{provider.configured && <button type="button" className="btn-danger-text" onClick={() => removeProviderKey(provider.key)} disabled={providerBusy === provider.key}>Remove</button>}</div>
+                  </div>
+                  {message && <div className={`key-message${message.toLowerCase().includes("successful") || message.toLowerCase().includes("saved") ? " success" : ""}`}>{message}</div>}
+                </section>
+              );
+            })}
+          </div>
         </main>
       </div>
     );
@@ -633,7 +671,6 @@ function App() {
   if (page === "dashboard") {
     const profileDimensions = dashboardData.profile?.dimensions || [];
     const radarSkills = profileDimensions.map((item) => ({ name: item.name, score: Number(item.score || 0) }));
-    const profileEvidence = dashboardData.profile?.evidence || [];
     return (
       <div className="page-bg dashboard-page">
         <nav className="navbar">
@@ -659,20 +696,17 @@ function App() {
               {dashboardData.profile?.has_demo_data && <button className="clear-demo" onClick={() => updateDemoProfile("DELETE")}>Clear sample profile data</button>}
             </article>
             <article className="dashboard-card strengths-card">
-              <div className="card-heading"><div><h2>Profile evidence</h2><p>Why the coach currently sees you this way.</p></div></div>
-              <div className="insight-columns">
-                <div><h3>Current signals</h3>{profileEvidence.slice(0, 6).map((item, index) => <p key={`${item.dimension}-${index}`}><strong>{profileDimensions.find((dimension) => dimension.key === item.dimension)?.name || item.dimension}</strong><br />{item.evidence}{item.is_demo && <small> Sample</small>}</p>)}{profileEvidence.length === 0 && <span className="empty-note">Evidence will appear after completed interviews.</span>}</div>
-                <div><h3>Knowledge patterns</h3>{dashboardData.memories.slice(0, 5).map((item) => <p key={item.id}>{item.kind === "strong_point" ? "✓" : "↗"} {item.content}</p>)}{dashboardData.memories.length === 0 && <span className="empty-note">No verified knowledge patterns yet.</span>}</div>
-              </div>
+              <div className="card-heading"><div><h2>What AI remembers about you</h2><p>Durable traits learned from interviews—not a transcript dump.</p></div></div>
+              <div className="memory-snapshot">{dashboardData.memories.slice(0, 6).map((item) => <article key={item.id}><span>{MEMORY_LABELS[item.kind] || item.kind.replaceAll("_", " ")}{item.is_demo ? " · Sample" : ""}</span><p>{item.content}</p><small>{item.topic || "General"} · {Math.round(item.confidence * 100)}% confidence</small></article>)}{dashboardData.memories.length === 0 && <div className="memory-empty"><strong>No interview memory yet</strong><p>After an interview, AI will remember demonstrated expertise, communication patterns, working style, preferences, strengths, and recurring growth areas.</p></div>}</div>
             </article>
           </section>
           <section className="dashboard-card memory-browser">
-            <div className="card-heading"><div><h2>Coach memory</h2><p>See exactly what is carried into future interviews and where it came from.</p></div><span>{dashboardData.memories.length} active</span></div>
+              <div className="card-heading"><div><h2>AI memory</h2><p>What the coach has learned about you, with confidence and source context.</p></div><span>{dashboardData.memories.length} active</span></div>
             <div className="memory-list">
               {dashboardData.memories.map((item) => (
                 <article className={`memory-row ${item.kind}`} key={item.id}>
-                  <span className="memory-kind">{item.kind === "weak_point" ? "Growth area" : "Strength"}</span>
-                  <div><strong>{item.content}</strong><p>{item.topic || "General interview"} · seen {item.times_seen} time{item.times_seen === 1 ? "" : "s"} · confidence {Math.round(item.confidence * 100)}%</p>{item.question && <small>Evidence question: {item.question}</small>}</div>
+                  <span className="memory-kind">{MEMORY_LABELS[item.kind] || item.kind.replaceAll("_", " ")}</span>
+                  <div><strong>{item.content}{item.is_demo ? <em className="sample-tag">Sample</em> : null}</strong><p>{item.topic || "General interview"} · seen {item.times_seen} time{item.times_seen === 1 ? "" : "s"} · confidence {Math.round(item.confidence * 100)}%</p>{item.question && <small>Evidence question: {item.question}</small>}</div>
                   <div className="memory-source">{item.interview_date ? new Date(item.interview_date).toLocaleDateString() : "Imported memory"}</div>
                 </article>
               ))}

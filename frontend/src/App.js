@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import "./App.css";
 
 const API_URL = process.env.REACT_APP_API_URL ||
-  (process.env.NODE_ENV === "development" ? "http://localhost:8000" : `${window.location.origin}/api`);
+  (process.env.NODE_ENV === "development" ? "http://localhost:8000" : window.location.origin);
 const MEMORY_LABELS = {
   expertise: "Area of expertise",
   communication_pattern: "Communication pattern",

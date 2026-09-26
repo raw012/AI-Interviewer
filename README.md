@@ -127,6 +127,22 @@ npm start
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Production hosting
+
+Build the frontend, then point `FRONTEND_BUILD_DIR` at the generated directory to
+serve the React application and FastAPI API from one origin:
+
+```bash
+cd frontend && npm run build && cd ..
+cd backend
+FRONTEND_BUILD_DIR="$(pwd)/../frontend/build" \
+  .venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+In production, the frontend sends API requests to its own HTTPS origin. Put that
+origin behind a TLS reverse proxy or a private-origin tunnel; do not expose the
+Uvicorn development server directly to the internet.
+
 ## Verification
 
 Build the frontend:

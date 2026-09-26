@@ -11,6 +11,7 @@ load_dotenv()
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pypdf import PdfReader
 
 from evaluator import analyze_recording, score_answer, update_interview_summary
@@ -803,3 +804,12 @@ def encouragement(score: float) -> str:
     if score >= 60:
         return "Solid effort. Use the improvement notes to guide the next focused session."
     return "Keep practicing. Your feedback will help distinguish knowledge gaps from mismatched questions."
+
+
+frontend_build_dir = os.getenv("FRONTEND_BUILD_DIR", "").strip()
+if frontend_build_dir and os.path.isdir(frontend_build_dir):
+    app.mount(
+        "/",
+        StaticFiles(directory=frontend_build_dir, html=True),
+        name="frontend",
+    )

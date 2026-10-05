@@ -311,10 +311,10 @@ button, input, textarea, select { font: inherit; }
 .quick-settings > span:not(:first-child)::before { content: '·'; display: inline-block; margin: 0 15px; color: #96a2b5; }
 .quick-settings button, .recent-heading button, .recent-interview button { border: 0; background: none; color: #165fc9; font-size: 13px; font-weight: 700; cursor: pointer; }
 .quick-settings button { margin-left: 20px; white-space: nowrap; }
-.practice-hero-plant { display: grid; grid-template-columns: 94px minmax(0, 1fr); grid-template-rows: 1fr 1fr; align-items: center; align-self: end; width: min(100%, 276px); min-height: 113px; padding: 7px 14px 7px 5px; border: 1px solid #e7edf5; border-radius: 16px; background: #f8fbff; }
-.practice-hero-plant strong { align-self: end; color: #304966; font-size: 12px; }
-.practice-hero-plant > span { align-self: start; margin-top: 3px; color: #78889b; font-size: 11px; }
-.practice-plant { display: block; grid-row: 1 / span 2; width: 94px; height: 99px; overflow: visible; }
+.practice-hero-plant { display: grid; grid-template-columns: 130px minmax(0, 1fr); grid-template-rows: 1fr 1fr; align-items: center; align-self: end; width: min(100%, 330px); min-height: 148px; padding: 8px 17px 8px 5px; border: 1px solid #e7edf5; border-radius: 16px; background: #f8fbff; }
+.practice-hero-plant strong { align-self: end; color: #304966; font-size: 14px; }
+.practice-hero-plant > span { align-self: start; margin-top: 5px; color: #78889b; font-size: 12px; }
+.practice-plant { display: block; grid-row: 1 / span 2; width: 130px; height: 136px; overflow: visible; }
 .practice-plant-shadow { fill: #dce6f0; opacity: .48; }
 .practice-plant-stem, .practice-plant-branch { fill: none; stroke: #6f9c85; stroke-width: 3; stroke-linecap: round; }
 .practice-plant-branch { stroke-width: 2.5; }
@@ -381,7 +381,7 @@ button, input, textarea, select { font: inherit; }
 .transcript-control button { border: 0; background: transparent; color: #1f62c4; font-size: 12px; font-weight: 700; cursor: pointer; }
 .transcript-panel { width: min(100%, 520px); max-height: 130px; overflow-y: auto; border-radius: 10px; background: white; border: 1px solid #e3eaf3; padding: 13px 15px; color: #344c69; font-size: 13px; line-height: 1.5; }
 .result-celebration { display: flex; align-items: center; gap: 24px; padding: 12px 0 24px; }
-.result-celebration .practice-plant { flex: 0 0 94px; }
+.result-celebration .practice-plant { flex: 0 0 130px; }
 .result-celebration p:last-child { color: #65748b; line-height: 1.5; margin-top: 7px; }
 
 @media (max-width: 760px) {
@@ -403,7 +403,7 @@ button, input, textarea, select { font: inherit; }
   .practice-hero { display: flex; flex-direction: column; align-items: stretch; margin-top: 10px; gap: 12px; }
   .practice-hero-copy h1 { font-size: clamp(31px, 8vw, 43px); }
   .practice-hero-copy > p:not(.dashboard-eyebrow) { font-size: 14px; margin: 12px 0 20px; }
-  .practice-hero-plant { align-self: flex-start; width: min(100%, 276px); }
+  .practice-hero-plant { align-self: flex-start; width: min(100%, 330px); }
   .quick-settings { width: 100%; font-size: 11px; }
   .quick-settings > span:not(:first-child)::before { margin: 0 6px; }
   .quick-settings button { margin-left: auto; font-size: 11px; }
@@ -419,7 +419,7 @@ button, input, textarea, select { font: inherit; }
   .simple-panel { align-items: flex-start; flex-direction: column; }
   .settings-page .settings-container { padding-top: 40px; }
   .provider-selects, .provider-grid { grid-template-columns: 1fr; }
-  .result-celebration .practice-plant { flex-basis: 80px; width: 80px; height: 85px; }
+  .result-celebration .practice-plant { flex-basis: 112px; width: 112px; height: 117px; }
   .result-celebration { gap: 12px; }
 }
 

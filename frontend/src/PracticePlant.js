@@ -38,9 +38,9 @@ export default function PracticePlant({ completed = 0, celebrate = false }) {
       className={`practice-plant${celebrate ? " is-celebrating" : ""}`}
       viewBox="25 10 130 145"
       role="img"
-      aria-label={`A small practice plant grown by ${count} completed interviews`}
+      aria-label={`A practice plant grown by ${count} completed interviews`}
     >
-      <ellipse cx="90" cy="151" rx="36" ry="4" className="practice-plant-shadow" />
+      <ellipse cx="90" cy="151" rx="47" ry="4" className="practice-plant-shadow" />
       {visibleLeaves > 0 ? (
         <>
           <path d={`M 90 118 C 88 100 93 ${top + 16} 90 ${top}`} className="practice-plant-stem" />
@@ -51,8 +51,8 @@ export default function PracticePlant({ completed = 0, celebrate = false }) {
       ) : (
         <ellipse cx="90" cy="113" rx="5" ry="3" className="practice-plant-seed" />
       )}
-      <path d="M 58 119 H 122 L 116 145 Q 115 150 109 150 H 71 Q 65 150 64 145 Z" className="practice-plant-pot" />
-      <path d="M 56 117 Q 56 114 60 114 H 120 Q 124 114 124 117 V 121 H 56 Z" className="practice-plant-pot-rim" />
+      <path d="M 47 119 H 133 L 126 145 Q 125 150 118 150 H 62 Q 55 150 54 145 Z" className="practice-plant-pot" />
+      <path d="M 45 117 Q 45 114 49 114 H 131 Q 135 114 135 117 V 121 H 45 Z" className="practice-plant-pot-rim" />
       <circle cx="79" cy="133" r="1.6" className="practice-plant-face" />
       <circle cx="101" cy="133" r="1.6" className="practice-plant-face" />
       <path d="M 85 139 Q 90 143 95 139" className="practice-plant-smile" />

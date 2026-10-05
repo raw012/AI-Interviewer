@@ -19,6 +19,9 @@ function mockAppRequests(connected) {
     if (url.endsWith("/resume/status")) return jsonResponse({ has_resume: true, filename: "resume.pdf" });
     if (url.endsWith("/dashboard")) return jsonResponse({ interviews: [], summary: { interviews: 0 } });
     if (url.endsWith("/settings/providers")) return jsonResponse({ providers: [provider], llm_provider: "groq", transcription_provider: "groq" });
+    if (url.endsWith("/settings/providers/groq/test")) return jsonResponse({ ok: true, message: "Connection successful" });
+    if (url.endsWith("/settings/providers/groq/key")) return jsonResponse({ configured: true });
+    if (url.endsWith("/settings/providers/active")) return jsonResponse({ llm_provider: "groq", transcription_provider: "groq" });
     throw new Error(`Unexpected request: ${url}`);
   });
 }
@@ -56,4 +59,26 @@ test("hides onboarding and enables one-click Start with providers ready", async 
   await waitFor(() => expect(screen.getByRole("button", { name: "Start interview" })).toBeEnabled());
   expect(screen.queryByRole("heading", { name: "Connect your AI providers" })).not.toBeInTheDocument();
   expect(screen.queryByText(/Uses your last settings/i)).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Your recent interviews" })).not.toBeInTheDocument();
+});
+
+test("first-time API setup offers a key or Groq guidance", async () => {
+  mockAppRequests(false);
+  render(<App />);
+  fireEvent.click((await screen.findAllByRole("button", { name: "API settings" }))[0]);
+  expect(await screen.findByRole("button", { name: /I have an API key/i })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /I need an API key/i }));
+  expect(screen.getByRole("heading", { name: "Get a Groq API key" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Open Groq API Keys/i })).toHaveAttribute("href", "https://console.groq.com/keys");
+  expect(screen.getByRole("button", { name: "Test & save key" })).toBeDisabled();
+});
+
+test("existing connection shows current provider instead of first-time choices", async () => {
+  mockAppRequests(true);
+  render(<App />);
+  fireEvent.click((await screen.findAllByRole("button", { name: "API settings" }))[0]);
+  expect(await screen.findByRole("heading", { name: "Ready for your next interview" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /I have an API key/i })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Change connection" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Need a guide?" })).toBeInTheDocument();
 });

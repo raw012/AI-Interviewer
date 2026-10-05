@@ -289,6 +289,43 @@ button, input, textarea, select { font: inherit; }
 .provider-card .provider-heading > span { grid-column: 1 / -1; justify-self: start; }
 .provider-card .saved-key { margin-top: 16px; }
 .provider-card .key-form { margin-top: 16px; }
+.api-onboarding { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.api-choice { min-height: 225px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 30px; border: 1px solid #dce7f3; border-radius: 18px; background: #f7faff; text-align: left; cursor: pointer; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+.api-choice:hover, .api-choice:focus-visible { transform: translateY(-2px); border-color: #9bbde9; box-shadow: 0 12px 28px rgba(34,91,162,.09); }
+.api-choice-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: #e2edfc; color: #2064bf; font-size: 21px; }
+.api-choice strong { color: #18314f; font-size: 20px; }
+.api-choice > span:not(.api-choice-icon) { color: #63758d; font-size: 14px; line-height: 1.5; }
+.api-choice b { margin-top: auto; color: #2165c2; font-size: 13px; }
+.api-current { background: #f7faff; }
+.api-current-heading, .api-entry-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.api-current h2, .api-entry h2, .api-guide h2 { margin-top: 7px; color: #1b3552; font-size: 22px; }
+.api-status { flex: none; padding: 7px 11px; border-radius: 99px; background: #fff0df; color: #9a5e19; font-size: 11px; font-weight: 700; }
+.api-status.ready { background: #e7f3e9; color: #3e7b55; }
+.api-current-roles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+.api-current-roles > div { display: grid; gap: 6px; padding: 17px; border: 1px solid #e4ebf3; border-radius: 12px; background: white; }
+.api-current-roles span { color: #71819a; font-size: 12px; }
+.api-current-roles strong { color: #203956; font-size: 17px; }
+.api-current-roles small { color: #8492a5; font-size: 12px; }
+.api-current-actions, .api-entry-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 23px; }
+.api-text-button { border: 0; background: transparent; color: #2364bf; font-size: 13px; font-weight: 700; cursor: pointer; }
+.api-entry, .api-guide { margin-top: 18px; }
+.api-entry-title p:last-child { margin: 8px 0 22px; color: #6e7e93; font-size: 13px; }
+.api-entry label { display: grid; gap: 7px; margin-top: 14px; color: #304561; font-size: 13px; font-weight: 700; }
+.api-entry input, .api-entry select { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #d9e4f0; border-radius: 9px; background: white; color: #23364e; font: inherit; font-weight: 400; }
+.api-entry input:focus, .api-entry select:focus { border-color: #4382cd; outline: 3px solid #e0edff; }
+.api-entry-note { margin-top: 14px; color: #647994; font-size: 12px; line-height: 1.5; }
+.api-entry-actions .btn-primary { width: auto; min-width: 180px; padding: 11px 18px; }
+.api-entry-actions button:disabled { opacity: .55; cursor: not-allowed; }
+.api-guide ol { display: grid; gap: 8px; margin: 20px 0; padding-left: 23px; color: #50647e; font-size: 13px; line-height: 1.5; }
+.api-guide a { display: inline-block; color: #2064bf; font-size: 13px; font-weight: 700; }
+.api-guide > p:last-child { margin-top: 15px; color: #77879c; font-size: 12px; }
+.api-advanced { margin-top: 25px; }
+.api-advanced summary { width: fit-content; color: #416384; font-size: 13px; font-weight: 700; cursor: pointer; }
+.api-advanced > div { margin-top: 12px; }
+.api-advanced p { margin-bottom: 17px; color: #708198; font-size: 12px; }
+.api-saved-list { margin-top: 20px; border-top: 1px solid #edf1f6; }
+.api-saved-list > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; color: #425b78; font-size: 12px; }
+.api-security-note { margin-top: 22px; color: #8a98aa; font-size: 11px; line-height: 1.5; }
 
 /* Focused interview home */
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 280px minmax(0, 1fr); background: #fff; overflow-x: clip; }
@@ -308,7 +345,7 @@ button, input, textarea, select { font: inherit; }
 .practice-hero-copy > p:not(.dashboard-eyebrow) { margin: 19px 0 28px; max-width: 680px; color: #65748b; font-size: 17px; line-height: 1.55; }
 .quick-settings { display: flex; flex-wrap: wrap; gap: 0; align-items: center; min-height: 56px; width: fit-content; max-width: 100%; padding: 10px 14px; border: 1px solid #e3eaf2; border-radius: 10px; color: #53647e; font-size: 13px; }
 .quick-settings > span:not(:first-child)::before { content: '·'; display: inline-block; margin: 0 15px; color: #96a2b5; }
-.quick-settings button, .recent-heading button, .recent-interview button { border: 0; background: none; color: #165fc9; font-size: 13px; font-weight: 700; cursor: pointer; }
+.quick-settings button { border: 0; background: none; color: #165fc9; font-size: 13px; font-weight: 700; cursor: pointer; }
 .quick-settings button { margin-left: 20px; white-space: nowrap; }
 .practice-hero-plant { position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; align-self: stretch; width: 100%; min-height: 280px; padding: 4px 0 13px; }
 .practice-hero-plant::before { content: ''; position: absolute; z-index: -1; inset: -35px -52px -12px; background: url('./practice-garden.png') center bottom / cover no-repeat; -webkit-mask-image: radial-gradient(ellipse 58% 62% at 50% 68%, #000 16%, transparent 100%); mask-image: radial-gradient(ellipse 58% 62% at 50% 68%, #000 16%, transparent 100%); opacity: .75; pointer-events: none; }
@@ -346,14 +383,6 @@ button, input, textarea, select { font: inherit; }
 .quick-start { display: block; width: min(100%, 1100px); max-width: 1100px; margin-top: 18px; height: 62px; font-size: 17px; box-shadow: 0 9px 22px rgba(31,99,204,.13); }
 .quick-start:disabled { background: #dfe8f5; color: #7387a6; opacity: 1; box-shadow: none; }
 .quick-start-note { margin-top: 12px; color: #65748b; font-size: 13px; }
-.recent-section { margin-top: 56px; padding-top: 32px; border-top: 1px solid #e9edf2; }
-.recent-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
-.recent-heading h2 { font-size: 22px; color: #172841; }
-.recent-interview { display: grid; grid-template-columns: minmax(160px, .65fr) minmax(0, 1fr) auto; gap: 22px; align-items: center; margin-top: 18px; padding: 19px 22px; border: 1px solid #e4ebf1; border-radius: 14px; }
-.recent-interview div { display: grid; gap: 7px; }
-.recent-interview strong { font-size: 14px; color: #20354f; }
-.recent-interview span { color: #8190a4; font-size: 12px; }
-.recent-interview p { min-width: 0; max-height: 4.5em; overflow: hidden; color: #63738b; font-size: 13px; line-height: 1.5; }
 .quiet-empty { padding: 20px 0; color: #7a889e; font-size: 14px; }
 .simple-page { max-width: 930px; padding-top: 78px; }
 .simple-page h1 { color: #172841; font-size: 40px; letter-spacing: -.03em; }
@@ -402,7 +431,6 @@ button, input, textarea, select { font: inherit; }
   .needs-provider .connect-guide { order: 1; margin-top: 16px; }
   .needs-provider .quick-start { order: 2; }
   .needs-provider .practice-hero-plant { order: 3; margin-top: 24px; }
-  .needs-provider .recent-section { order: 4; }
   .practice-hero { display: flex; flex-direction: column; align-items: stretch; margin-top: 10px; gap: 12px; }
   .practice-hero-copy h1 { font-size: clamp(31px, 8vw, 43px); }
   .practice-hero-copy > p:not(.dashboard-eyebrow) { font-size: 14px; margin: 12px 0 20px; }
@@ -420,12 +448,12 @@ button, input, textarea, select { font: inherit; }
   .connect-guide-requirements small { font-size: 11px; }
   .connect-guide-requirements button { font-size: 12px; }
   .quick-start { max-width: none; height: 56px; }
-  .recent-section { margin-top: 32px; padding-top: 24px; }
-  .recent-interview { grid-template-columns: 1fr; gap: 11px; }
   .simple-page { padding-top: 42px; }
   .simple-page h1 { font-size: 33px; }
   .simple-panel { align-items: flex-start; flex-direction: column; }
   .settings-page .settings-container { padding-top: 40px; }
+  .api-onboarding, .api-current-roles { grid-template-columns: 1fr; }
+  .api-choice { min-height: 190px; }
   .provider-selects, .provider-grid { grid-template-columns: 1fr; }
   .result-celebration .practice-plant { flex-basis: 112px; width: 112px; height: 117px; }
   .result-celebration { gap: 12px; }

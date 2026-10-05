@@ -10,6 +10,7 @@ The application is built with React, FastAPI, and SQLite. Interview generation c
 
 - The primary action is starting an interview. Your last mode, topic, duration, and job description are reused for a one-click start when a source is available.
 - Without working interview and transcription providers, a soft setup section offers direct links for each missing service and Start stays disabled. The section disappears when both providers are ready.
+- Home focuses on starting an interview; completed interviews and feedback live in Past interviews rather than a duplicate recent-interviews panel.
 - The flat blue-and-muted-green practice plant is part of the home background rather than a separate card. A small sprout appears from the start, and more leaves grow outward with completed interviews; the newest leaf unfurls on the feedback screen. Reduced-motion settings disable the animation.
 - The signed-in app shows one Sign out control in the top-right account bar, including on the API settings page.
 - Desktop uses a compact sidebar; mobile uses a bottom tab bar for Home, Resume, Past interviews, and API settings.
@@ -53,7 +54,9 @@ Users can also create account-specific custom training topics.
 
 ### API key settings
 
-- Save, replace, test, or remove personal provider API keys. Text generation supports the providers exposed in API settings; transcription currently supports Groq and OpenAI.
+- First-time setup asks whether the user already has a key or needs one. The latter path links to Groq's API-key page; both paths test a key before saving it.
+- Returning users see their current interview and transcription connections first, with options to change, test, or remove keys and reopen the guide.
+- Interview generation supports Groq, OpenAI, Anthropic, Google Gemini, and Qwen (China and International endpoints). The provider must match the service and region that issued the key. Transcription currently supports Groq and OpenAI, so other interview providers require a second key for spoken answers.
 - Keys are encrypted before local database storage.
 - The complete key is never returned to the browser after saving.
 - A personal key takes precedence over a server fallback key where one is configured.

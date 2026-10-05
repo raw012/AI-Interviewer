@@ -32,13 +32,31 @@ PROVIDERS = {
         "transcription": False,
         "model": "gemini-2.5-flash",
     },
+    "qwen_cn": {
+        "name": "Qwen (China)",
+        "chat": True,
+        "transcription": False,
+        "model": "qwen-plus",
+    },
+    "qwen_intl": {
+        "name": "Qwen (International)",
+        "chat": True,
+        "transcription": False,
+        "model": "qwen-plus",
+    },
 }
 
 
 def complete_text(provider: str, api_key: str, prompt: str) -> str:
     provider = provider.lower()
-    if provider in {"groq", "openai"}:
-        base = "https://api.groq.com/openai/v1" if provider == "groq" else "https://api.openai.com/v1"
+    compatible_bases = {
+        "groq": "https://api.groq.com/openai/v1",
+        "openai": "https://api.openai.com/v1",
+        "qwen_cn": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "qwen_intl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    }
+    if provider in compatible_bases:
+        base = compatible_bases[provider]
         response = httpx.post(
             f"{base}/chat/completions",
             headers={"Authorization": f"Bearer {api_key}"},

@@ -48,6 +48,9 @@ function App() {
   const [providerInputs, setProviderInputs] = useState({});
   const [providerBusy, setProviderBusy] = useState("");
   const [providerMessages, setProviderMessages] = useState({});
+  const [keySetupPath, setKeySetupPath] = useState("");
+  const [editingConnection, setEditingConnection] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState("groq");
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [preferencesRestoredFor, setPreferencesRestoredFor] = useState("");
   const [historyAnswers, setHistoryAnswers] = useState({});
@@ -80,6 +83,8 @@ function App() {
   const activeTranscription = providerConfig.providers.find((item) => item.key === providerConfig.transcription_provider);
   const isConnected = (provider) => Boolean(provider?.configured || provider?.server_fallback_available);
   const providersReady = providerConfigLoaded && isConnected(activeLlm) && isConnected(activeTranscription);
+  const connectedProviders = providerConfig.providers.filter(isConnected);
+  const needsTranscription = isConnected(activeLlm) && !isConnected(activeTranscription);
   const hasInterviewSource = mode === "special" || resumeStatus.has_resume || Boolean(jobDescription.trim());
 
   useEffect(() => {
@@ -113,6 +118,8 @@ function App() {
     setUser(null);
     setProviderConfigLoaded(false);
     setProviderConfig({ providers: [], llm_provider: "groq", transcription_provider: "groq" });
+    setKeySetupPath("");
+    setEditingConnection(false);
     setPreferencesRestoredFor("");
     setHistoryAnswers({});
     setHistoryInterviews(null);
@@ -201,26 +208,6 @@ function App() {
     }
   };
 
-  const saveProviderKey = async (provider) => {
-    setProviderBusy(provider);
-    setProviderMessages((current) => ({ ...current, [provider]: "" }));
-    try {
-      await apiRequest(`/settings/providers/${provider}/key`, token, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ api_key: providerInputs[provider] || "" }),
-      });
-      const refreshed = await apiRequest("/settings/providers", token);
-      setProviderConfig(await refreshed.json());
-      setProviderInputs((current) => ({ ...current, [provider]: "" }));
-      setProviderMessages((current) => ({ ...current, [provider]: "API key saved securely." }));
-    } catch (error) {
-      setProviderMessages((current) => ({ ...current, [provider]: error.message }));
-    } finally {
-      setProviderBusy("");
-    }
-  };
-
   const testProviderKey = async (provider) => {
     setProviderBusy(provider);
     setProviderMessages((current) => ({ ...current, [provider]: "" }));
@@ -234,6 +221,45 @@ function App() {
       setProviderMessages((current) => ({ ...current, [provider]: result.message }));
     } catch (error) {
       setProviderMessages((current) => ({ ...current, [provider]: error.message }));
+    } finally {
+      setProviderBusy("");
+    }
+  };
+
+  const connectProviderKey = async () => {
+    const apiKey = (providerInputs[selectedProvider] || "").trim();
+    if (!apiKey) return;
+    setProviderBusy(selectedProvider);
+    setProviderMessages((current) => ({ ...current, [selectedProvider]: "" }));
+    try {
+      await apiRequest(`/settings/providers/${selectedProvider}/test`, token, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: apiKey }),
+      });
+      await apiRequest(`/settings/providers/${selectedProvider}/key`, token, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: apiKey }),
+      });
+      const metadata = providerConfig.providers.find((item) => item.key === selectedProvider);
+      const next = {
+        llm_provider: needsTranscription ? providerConfig.llm_provider : selectedProvider,
+        transcription_provider: metadata.transcription ? selectedProvider : providerConfig.transcription_provider,
+      };
+      await apiRequest("/settings/providers/active", token, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      const response = await apiRequest("/settings/providers", token);
+      setProviderConfig(await response.json());
+      setProviderInputs((current) => ({ ...current, [selectedProvider]: "" }));
+      setProviderMessages((current) => ({ ...current, [selectedProvider]: "Connection verified and saved." }));
+      setEditingConnection(false);
+      setKeySetupPath("");
+    } catch (error) {
+      setProviderMessages((current) => ({ ...current, [selectedProvider]: error.message }));
     } finally {
       setProviderBusy("");
     }
@@ -626,37 +652,34 @@ function App() {
   }
 
   if (page === "api-settings") {
+    const showOnboarding = providerConfigLoaded && connectedProviders.length === 0 && !keySetupPath;
+    const showKeyEntry = keySetupPath || editingConnection;
+    const selectedMetadata = providerConfig.providers.find((item) => item.key === selectedProvider);
     return (
       <div className="app-shell settings-page">
         <AppNavigation page={page} setPage={setPage} />
         <main className="app-main"><div className="app-main-top"><span>{user.name || user.email}</span><button type="button" onClick={signOut}>Sign out</button></div><div className="settings-container">
-          <header><p className="dashboard-eyebrow">ONE-TIME SETUP</p><h1>API settings</h1><p>Connect one provider for interview questions and feedback, and one for audio transcription. Groq or OpenAI can serve both roles with a single key.</p></header>
+          <header><p className="dashboard-eyebrow">YOUR CONNECTION</p><h1>API settings</h1><p>{connectedProviders.length ? "Your interview connection is ready to manage here." : "Connect an AI service once, then focus on your interviews."}</p></header>
           {interviewError && <p className="inline-error" role="alert">{interviewError}</p>}
-          <section className="settings-card provider-routing">
-            <div className="card-heading"><div><h2>Active providers</h2><p>Choose one provider for interview intelligence and one for speech-to-text.</p></div></div>
-            <div className="provider-selects">
-              <label>Interview intelligence<select value={providerConfig.llm_provider} onChange={(event) => setActiveProviders("llm_provider", event.target.value)}>{providerConfig.providers.filter((item) => item.chat).map((item) => <option key={item.key} value={item.key}>{item.name} · {item.model}</option>)}</select></label>
-              <label>Audio transcription<select value={providerConfig.transcription_provider} onChange={(event) => setActiveProviders("transcription_provider", event.target.value)}>{providerConfig.providers.filter((item) => item.transcription).map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label>
-            </div>
-          </section>
-          <div className="key-security-note"><strong>Your keys stay private.</strong><p>Each key is encrypted before database storage. Complete keys are never returned to the browser. Audio transcription currently supports Groq and OpenAI.</p></div>
-          <div className="provider-grid">
-            {providerConfig.providers.map((provider) => {
-              const connected = provider.configured || provider.server_fallback_available;
-              const message = providerMessages[provider.key] || "";
-              return (
-                <section className="settings-card provider-card" key={provider.key}>
-                  <div className="provider-heading"><div className={`provider-logo ${provider.key}`}>{provider.name.charAt(0)}</div><div><h2>{provider.name}</h2><p>{provider.chat ? `Interview model: ${provider.model}` : ""}{provider.transcription ? " · Speech-to-text" : ""}</p></div><span className={connected ? "connected" : "missing"}>{provider.configured ? "Personal key saved" : provider.server_fallback_available ? "Server fallback" : "Not configured"}</span></div>
-                  {provider.configured && <div className="saved-key"><span>Saved key</span><code>{provider.masked}</code><small>{provider.updated_at ? new Date(provider.updated_at).toLocaleDateString() : ""}</small></div>}
-                  <div className="key-form">
-                    <label>{provider.configured ? "Replace API key" : "API key"}<input type="password" autoComplete="off" value={providerInputs[provider.key] || ""} onChange={(event) => setProviderInputs((current) => ({ ...current, [provider.key]: event.target.value }))} placeholder="Paste provider key" /></label>
-                    <div className="key-actions"><button type="button" className="btn-secondary" onClick={() => testProviderKey(provider.key)} disabled={providerBusy === provider.key || (!providerInputs[provider.key] && !connected)}>Test</button><button type="button" className="btn-primary" onClick={() => saveProviderKey(provider.key)} disabled={providerBusy === provider.key || !providerInputs[provider.key]}>{providerBusy === provider.key ? "Please wait…" : "Save"}</button>{provider.configured && <button type="button" className="btn-danger-text" onClick={() => removeProviderKey(provider.key)} disabled={providerBusy === provider.key}>Remove</button>}</div>
-                  </div>
-                  {message && <div className={`key-message${message.toLowerCase().includes("successful") || message.toLowerCase().includes("saved") ? " success" : ""}`}>{message}</div>}
-                </section>
-              );
-            })}
-          </div>
+          {showOnboarding && <section className="api-onboarding" aria-label="Choose how to connect">
+            <button type="button" className="api-choice" onClick={() => { setKeySetupPath("have"); setSelectedProvider("groq"); }}><span className="api-choice-icon">✦</span><strong>I have an API key</strong><span>Paste it, verify the connection, and start practicing.</span><b>Connect my key →</b></button>
+            <button type="button" className="api-choice" onClick={() => { setKeySetupPath("need"); setSelectedProvider("groq"); }}><span className="api-choice-icon">↗</span><strong>I need an API key</strong><span>We will walk you through getting a Groq key.</span><b>Show me how →</b></button>
+          </section>}
+          {connectedProviders.length > 0 && <section className="api-current settings-card">
+            <div className="api-current-heading"><div><p className="dashboard-eyebrow">CURRENT SETUP</p><h2>{providersReady ? "Ready for your next interview" : "One more connection needed"}</h2></div><span className={providersReady ? "api-status ready" : "api-status"}>{providersReady ? "Connected" : "Action needed"}</span></div>
+            <div className="api-current-roles"><div><span>Interview intelligence</span><strong>{activeLlm?.name || "Not selected"}</strong><small>{activeLlm?.configured ? activeLlm.masked : activeLlm?.server_fallback_available ? "Server connection" : "Not connected"}</small></div><div><span>Audio transcription</span><strong>{isConnected(activeTranscription) ? activeTranscription.name : "Not connected"}</strong><small>{activeTranscription?.configured ? activeTranscription.masked : activeTranscription?.server_fallback_available ? "Server connection" : "Required to review spoken answers"}</small></div></div>
+            <div className="api-current-actions"><button type="button" className="btn-secondary" onClick={() => { setEditingConnection((current) => !current); setKeySetupPath(""); setSelectedProvider(needsTranscription ? "groq" : providerConfig.llm_provider); }}>{editingConnection ? "Cancel" : needsTranscription ? "Connect transcription" : "Change connection"}</button><button type="button" className="api-text-button" onClick={() => { setKeySetupPath(keySetupPath === "need" ? "" : "need"); setSelectedProvider("groq"); }}>Need a guide?</button></div>
+          </section>}
+          {keySetupPath === "need" && <section className="api-guide settings-card"><p className="dashboard-eyebrow">GET STARTED</p><h2>Get a Groq API key</h2><ol><li>Create or sign in to a Groq account.</li><li>Open API Keys and create a new key.</li><li>Copy it and paste it below. We will test it before saving.</li></ol><a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Open Groq API Keys ↗</a><p>Already have a key from another service? You can choose it below instead.</p></section>}
+          {showKeyEntry && <section className="api-entry settings-card"><div className="api-entry-title"><div><p className="dashboard-eyebrow">{needsTranscription ? "FINISH SETUP" : "CONNECT A SERVICE"}</p><h2>{needsTranscription ? "Connect speech-to-text" : "Paste your API key"}</h2><p>Choose the service that issued your key. We check it before storing it.</p></div>{!connectedProviders.length && <button type="button" className="api-text-button" onClick={() => setKeySetupPath("")}>Back</button>}</div>
+            <label>Key provider<select value={selectedProvider} onChange={(event) => setSelectedProvider(event.target.value)}>{providerConfig.providers.filter((item) => !needsTranscription || item.transcription).map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label>
+            <label>API key<input type="password" autoComplete="off" value={providerInputs[selectedProvider] || ""} onChange={(event) => setProviderInputs((current) => ({ ...current, [selectedProvider]: event.target.value }))} placeholder="Paste your API key" /></label>
+            {selectedMetadata && !selectedMetadata.transcription && !isConnected(activeTranscription) && <p className="api-entry-note">{selectedMetadata.name} handles the interview. Spoken-answer transcription also needs a Groq or OpenAI key.</p>}
+            <div className="api-entry-actions"><button type="button" className="btn-primary" onClick={connectProviderKey} disabled={Boolean(providerBusy) || !providerInputs[selectedProvider]?.trim()}>{providerBusy ? "Checking connection…" : "Test & save key"}</button>{selectedMetadata?.configured && <button type="button" className="btn-secondary" onClick={() => testProviderKey(selectedProvider)} disabled={Boolean(providerBusy)}>Test saved key</button>}</div>
+            {providerMessages[selectedProvider] && <p className={`key-message${providerMessages[selectedProvider].includes("saved") || providerMessages[selectedProvider].includes("successful") ? " success" : ""}`} role="status">{providerMessages[selectedProvider]}</p>}
+          </section>}
+          {connectedProviders.length > 0 && <details className="api-advanced"><summary>More connection options</summary><div className="settings-card"><p>Use a previously saved key for either part of the interview, or remove a key you no longer use.</p><div className="provider-selects"><label>Interview intelligence<select value={providerConfig.llm_provider} onChange={(event) => setActiveProviders("llm_provider", event.target.value)}>{providerConfig.providers.filter((item) => item.chat && isConnected(item)).map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label><label>Audio transcription<select value={providerConfig.transcription_provider} onChange={(event) => setActiveProviders("transcription_provider", event.target.value)}>{providerConfig.providers.filter((item) => item.transcription && isConnected(item)).map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label></div><div className="api-saved-list">{connectedProviders.filter((item) => item.configured).map((item) => <div key={item.key}><span>{item.name} · {item.masked}</span><button type="button" className="btn-danger-text" onClick={() => removeProviderKey(item.key)} disabled={Boolean(providerBusy)}>Remove</button></div>)}</div></div></details>}
+          <p className="api-security-note">Keys are encrypted before storage and never shown in full again. Groq and OpenAI currently support audio transcription.</p>
         </div></main>
       </div>
     );
@@ -664,8 +687,6 @@ function App() {
 
   if (["dashboard", "resume", "history"].includes(page)) {
     const completedCount = dashboardData.summary.interviews || 0;
-    const completedInterviews = dashboardData.interviews.filter((item) => item.status === "completed");
-    const latest = completedInterviews[0];
     const nextMode = mode === "special" ? topics.find((item) => item.key === topic)?.name || "Specialized training" : "General interview";
     return (
       <div className="app-shell">
@@ -691,7 +712,6 @@ function App() {
             </section>}
             <button className="btn-primary quick-start" onClick={hasInterviewSource ? startInterview : () => setPage("setup")} disabled={!providersReady || isProcessing || !providerConfigLoaded}>{isProcessing ? "Preparing interview…" : !providersReady ? "Start interview" : hasInterviewSource ? "Start interview" : "Choose an interview focus"}</button>
             {!hasInterviewSource && providersReady && <p className="quick-start-note">Add a resume, paste a job description, or choose a specialized topic once to enable one-click start.</p>}
-            <section className="recent-section"><div className="recent-heading"><h2>Your recent interviews</h2><button type="button" onClick={() => setPage("history")}>View all</button></div>{latest ? <article className="recent-interview"><div><strong>{latest.mode === "special" ? topics.find((item) => item.key === latest.topic)?.name || "Specialized training" : "General interview"}</strong><span>{new Date(latest.created_at).toLocaleDateString()} · {latest.questions_answered} answers</span></div><p>{latest.cumulative_summary || "A step forward in your practice."}</p><button type="button" onClick={() => setPage("history")}>Read feedback</button></article> : <p className="quiet-empty">Your first completed interview will appear here, along with a short feedback summary.</p>}</section>
           </>}
           {page === "resume" && <section className="simple-page"><p className="dashboard-eyebrow">YOUR MATERIALS</p><h1>Resume</h1><p>Upload a PDF once. We will use it for future general interviews until you replace it.</p><div className="simple-panel"><div><strong>{resumeStatus.has_resume ? resumeStatus.filename : "No resume saved yet"}</strong><p>{resumeStatus.has_resume ? "This is your default resume for general interviews." : "A saved resume makes future interviews faster to start."}</p></div><label className="resume-upload">{resumeBusy ? "Processing…" : resumeStatus.has_resume ? "Replace PDF" : "Upload PDF"}<input type="file" accept="application/pdf,.pdf" onChange={uploadResume} disabled={resumeBusy} /></label></div></section>}
           {page === "history" && <section className="simple-page"><p className="dashboard-eyebrow">YOUR PROGRESS</p><h1>Past interviews</h1><p>Review each interview, its feedback summary, and your answers.</p>{interviewError && <p className="inline-error" role="alert">{interviewError}</p>}<div className="past-interviews">{(historyInterviews || []).map((interview) => <details key={interview.session_id} onToggle={(event) => { if (event.currentTarget.open) loadHistoryAnswers(interview.session_id); }}><summary><span><strong>{interview.mode === "special" ? topics.find((item) => item.key === interview.topic)?.name || "Specialized training" : "General interview"}</strong><small>{new Date(interview.created_at).toLocaleString()} · {interview.questions_answered} answers · {interview.duration_minutes} min</small></span><b>{interview.overall_score == null ? "In progress" : `${interview.overall_score}%`}</b></summary><div className="past-detail"><h3>Feedback summary</h3><p>{interview.cumulative_summary || "No feedback summary was generated."}</p>{historyLoading === interview.session_id && <p>Loading answers…</p>}{(historyAnswers[interview.session_id] || []).map((answer) => <div className="past-answer" key={answer.question_number}><strong>{answer.question_number}. {answer.question}</strong><p><b>Your answer:</b> {answer.answer}</p><p><b>What went well:</b> {answer.strengths || "No note"}</p><p><b>Improve next time:</b> {answer.improvements || "No note"}</p><small>Score {answer.score}/100 · {answer.relevance === "mismatch" ? "Marked as mismatched" : "Question fit not flagged"}</small></div>)}</div></details>)}{historyInterviews === null && <p className="quiet-empty">Loading past interviews…</p>}{historyInterviews?.length === 0 && <p className="quiet-empty">No interviews yet. Your first practice session will appear here.</p>}</div></section>}

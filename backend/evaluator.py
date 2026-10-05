@@ -1,8 +1,11 @@
+"""LLM prompts and parsing for follow-ups, answer scores, and summaries."""
+
 import os
 import json
 from providers import complete_text
 
 def generate_followup(transcript: str, provider: str = "groq", api_key: str | None = None):
+    """Ask the selected model for one relevant follow-up question."""
     api_key = api_key or os.getenv("GROQ_API_KEY")
     if not api_key:
         raise ValueError("No API key configured")
@@ -32,6 +35,7 @@ def score_answer(
     api_key: str | None = None,
     provider: str = "groq",
 ):
+    """Score one answer and extract evidence-backed profile signals."""
     api_key = api_key or os.getenv("GROQ_API_KEY")
     if not api_key:
         raise ValueError("No API key configured")

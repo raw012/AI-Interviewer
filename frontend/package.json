@@ -14,9 +14,15 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
+    "prestart": "node scripts/clean-appledouble.mjs",
     "start": "react-scripts start",
+    "prebuild": "node scripts/clean-appledouble.mjs",
     "build": "react-scripts build",
+    "pretest": "node scripts/clean-appledouble.mjs",
     "test": "react-scripts test",
+    "prelint": "node scripts/clean-appledouble.mjs",
+    "lint": "eslint src",
+    "clean:metadata": "node scripts/clean-appledouble.mjs",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

@@ -1,8 +1,11 @@
+/** Navigation and provider-onboarding regression tests for the signed-in app. */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import App from "./App";
 
+/** Minimal successful fetch response for UI-only tests. */
 const jsonResponse = (data) => ({ ok: true, json: async () => data });
 
+/** Supply stable account and provider data without real network calls. */
 function mockAppRequests(connected) {
   const provider = {
     key: "groq",
@@ -72,8 +75,21 @@ test("first-time API setup offers a key or Groq guidance", async () => {
   expect(screen.getByRole("link", { name: /Open Groq API Keys/i })).toHaveAttribute("href", "https://console.groq.com/keys");
   expect(screen.getByRole("button", { name: "Test & save key" })).toBeDisabled();
   expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Exit API settings to Home" }));
+  fireEvent.click(screen.getByRole("button", { name: "Go back from API settings" }));
+  expect(screen.getByRole("button", { name: /I have an API key/i })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Go back from API settings" }));
   expect(await screen.findByRole("heading", { name: /Ready for your next mock interview/i })).toBeInTheDocument();
+});
+
+test("settings exit returns to the page that opened it", async () => {
+  mockAppRequests(true);
+  render(<App />);
+  fireEvent.click(await screen.findByRole("button", { name: "Change settings" }));
+  expect(await screen.findByRole("heading", { name: "Choose your interview focus" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "API settings" }));
+  expect(await screen.findByRole("heading", { name: "API settings" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Go back from API settings" }));
+  expect(await screen.findByRole("heading", { name: "Choose your interview focus" })).toBeInTheDocument();
 });
 
 test("existing connection shows current provider instead of first-time choices", async () => {

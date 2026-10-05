@@ -20,10 +20,12 @@ PASSWORD_ITERATIONS = 260_000
 SECRET_KEY_PATH = DATA_DIR / ".secret_key"
 
 
+# Use UTC consistently for persisted timestamps.
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# Open a SQLite connection with named rows and foreign keys enabled.
 def connection() -> sqlite3.Connection:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(DB_PATH)
@@ -32,6 +34,7 @@ def connection() -> sqlite3.Connection:
     return db
 
 
+# Load or create the local key used to encrypt provider credentials.
 def _cipher() -> Fernet:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if not SECRET_KEY_PATH.exists():
@@ -40,6 +43,7 @@ def _cipher() -> Fernet:
     return Fernet(SECRET_KEY_PATH.read_bytes().strip())
 
 
+# Create the account, interview, memory, and settings tables if absent.
 def init_db() -> None:
     with connection() as db:
         db.executescript(
@@ -171,12 +175,14 @@ def init_db() -> None:
             )
 
 
+# Derive a salted password hash for storage and comparison.
 def _password_hash(password: str, salt: bytes | None = None) -> str:
     salt = salt or secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, PASSWORD_ITERATIONS)
     return f"{PASSWORD_ITERATIONS}${salt.hex()}${digest.hex()}"
 
 
+# Compare a password with its stored hash.
 def _password_valid(password: str, encoded: str) -> bool:
     try:
         iterations, salt, expected = encoded.split("$", 2)
@@ -188,10 +194,12 @@ def _password_valid(password: str, encoded: str) -> bool:
         return False
 
 
+# Return only safe account fields to API callers.
 def _public_user(row: sqlite3.Row) -> dict:
     return {"id": row["id"], "email": row["email"], "name": row["name"]}
 
 
+# Insert a new account after validating its credentials.
 def create_user(email: str, password: str, name: str = "") -> dict:
     email = email.strip().lower()
     if "@" not in email:
@@ -211,6 +219,7 @@ def create_user(email: str, password: str, name: str = "") -> dict:
     return _public_user(row)
 
 
+# Find an account only when its password matches.
 def authenticate_user(email: str, password: str) -> dict | None:
     with connection() as db:
         row = db.execute(
@@ -219,6 +228,7 @@ def authenticate_user(email: str, password: str) -> dict | None:
     return _public_user(row) if row and _password_valid(password, row["password_hash"]) else None
 
 
+# Create a time-limited bearer token for an account.
 def issue_token(user_id: str) -> str:
     token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(token.encode()).hexdigest()
@@ -231,6 +241,7 @@ def issue_token(user_id: str) -> str:
     return token
 
 
+# Resolve an unexpired bearer token to its account.
 def user_for_token(token: str) -> dict | None:
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     with connection() as db:
@@ -243,6 +254,7 @@ def user_for_token(token: str) -> dict | None:
     return _public_user(row) if row else None
 
 
+# Replace the account's saved PDF and extracted text.
 def save_resume(user_id: str, filename: str, pdf: bytes, extracted_text: str) -> None:
     with connection() as db:
         db.execute(
@@ -255,6 +267,7 @@ def save_resume(user_id: str, filename: str, pdf: bytes, extracted_text: str) ->
         )
 
 
+# Read resume metadata, optionally including PDF bytes.
 def resume_for_user(user_id: str, include_pdf: bool = False) -> dict | None:
     columns = "filename,extracted_text,updated_at" + (",pdf" if include_pdf else "")
     with connection() as db:
@@ -262,12 +275,14 @@ def resume_for_user(user_id: str, include_pdf: bool = False) -> dict | None:
     return dict(row) if row else None
 
 
+# Remove the account's saved resume if present.
 def delete_resume(user_id: str) -> bool:
     with connection() as db:
         result = db.execute("DELETE FROM resumes WHERE user_id=?", (user_id,))
     return result.rowcount > 0
 
 
+# Persist a newly started interview session.
 def create_interview(record: dict) -> None:
     with connection() as db:
         db.execute(
@@ -280,6 +295,7 @@ def create_interview(record: dict) -> None:
         )
 
 
+# Persist an evaluated answer and return its question number.
 def save_answer(user_id: str, session_id: str, entry: dict, topic: str) -> int:
     evaluation = entry["evaluation"]
     with connection() as db:
@@ -298,6 +314,7 @@ def save_answer(user_id: str, session_id: str, entry: dict, topic: str) -> int:
         return int(cursor.lastrowid)
 
 
+# Replace the compact running summary for one interview.
 def update_interview_summary(session_id: str, summary: str) -> None:
     with connection() as db:
         db.execute(
@@ -306,6 +323,7 @@ def update_interview_summary(session_id: str, summary: str) -> None:
         )
 
 
+# Mark a session complete with its final score.
 def complete_interview(session_id: str, overall_score: float) -> None:
     with connection() as db:
         db.execute(
@@ -315,6 +333,7 @@ def complete_interview(session_id: str, overall_score: float) -> None:
         )
 
 
+# Mark an abandoned interview as cancelled.
 def cancel_interview(session_id: str) -> None:
     with connection() as db:
         db.execute(
@@ -324,6 +343,7 @@ def cancel_interview(session_id: str) -> None:
         )
 
 
+# Merge a new strength, gap, or user insight into long-term memory.
 def upsert_memory(
     user_id: str, kind: str, topic: str, content: str, source_answer_id: int,
 ) -> None:
@@ -344,6 +364,7 @@ def upsert_memory(
         )
 
 
+# Format relevant long-term memory for the next model prompt.
 def memory_context(user_id: str, topic: str = "", limit: int = 12) -> str:
     with connection() as db:
         rows = db.execute(
@@ -362,6 +383,7 @@ def memory_context(user_id: str, topic: str = "", limit: int = 12) -> str:
     )
 
 
+# Return prior questions to help the model avoid repetition.
 def recent_questions(user_id: str, topic: str = "", limit: int = 20) -> list[str]:
     with connection() as db:
         rows = db.execute(
@@ -373,6 +395,7 @@ def recent_questions(user_id: str, topic: str = "", limit: int = 20) -> list[str
     return [row["question"] for row in rows]
 
 
+# Store whether the user felt a question matched the interview.
 def save_question_feedback(
     user_id: str, session_id: str, question_number: int, relevance: str, issue_type: str,
 ) -> None:
@@ -394,6 +417,7 @@ def save_question_feedback(
             )
 
 
+# List sessions and their feedback summaries for history views.
 def list_interviews(user_id: str, limit: int | None = 20) -> list[dict]:
     with connection() as db:
         limit_clause = " LIMIT ?" if limit is not None else ""
@@ -410,6 +434,7 @@ def list_interviews(user_id: str, limit: int | None = 20) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+# Count completed sessions for the practice plant.
 def completed_interview_count(user_id: str) -> int:
     with connection() as db:
         row = db.execute(
@@ -419,6 +444,7 @@ def completed_interview_count(user_id: str) -> int:
     return int(row["total"])
 
 
+# Return all answers in an owned interview.
 def interview_answers(user_id: str, session_id: str) -> list[dict] | None:
     with connection() as db:
         interview = db.execute(
@@ -436,6 +462,7 @@ def interview_answers(user_id: str, session_id: str) -> list[dict] | None:
     return [dict(row) for row in rows]
 
 
+# Return saved retrospective reviews of uploaded recordings.
 def list_recording_reviews(user_id: str, limit: int = 20) -> list[dict]:
     with connection() as db:
         rows = db.execute(
@@ -450,6 +477,7 @@ def list_recording_reviews(user_id: str, limit: int = 20) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+# Return the user's current long-term memory items.
 def list_memory_items(user_id: str, limit: int = 50) -> list[dict]:
     with connection() as db:
         rows = db.execute(
@@ -467,6 +495,7 @@ def list_memory_items(user_id: str, limit: int = 50) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+# Save a custom specialized-training topic.
 def create_user_topic(user_id: str, name: str, description: str) -> dict:
     name = " ".join(name.strip().split())
     description = " ".join(description.strip().split())
@@ -486,6 +515,7 @@ def create_user_topic(user_id: str, name: str, description: str) -> dict:
     return {"key": key, "name": name, "description": description, "custom": True}
 
 
+# List custom topics available to one account.
 def list_user_topics(user_id: str) -> list[dict]:
     with connection() as db:
         rows = db.execute(
@@ -495,6 +525,7 @@ def list_user_topics(user_id: str) -> list[dict]:
     return [{**dict(row), "custom": True} for row in rows]
 
 
+# Aggregate topic-level scores from past answers.
 def skill_statistics(user_id: str) -> list[dict]:
     with connection() as db:
         rows = db.execute(
@@ -520,6 +551,7 @@ PROFILE_DIMENSIONS = {
 }
 
 
+# Aggregate behavioral and technical profile dimensions.
 def profile_dimension_statistics(user_id: str) -> dict:
     values: dict[str, list[float]] = {key: [] for key in PROFILE_DIMENSIONS}
     with connection() as db:
@@ -564,6 +596,7 @@ def profile_dimension_statistics(user_id: str) -> dict:
     }
 
 
+# Add sample profile data for an account without interviews.
 def seed_demo_profile(user_id: str) -> int:
     demo = [
         ("technical_depth", 74, "Explains core concepts accurately and identifies meaningful engineering trade-offs."),
@@ -601,6 +634,7 @@ def seed_demo_profile(user_id: str) -> int:
     return 0 if existing else len(demo)
 
 
+# Remove only the account's sample profile data.
 def delete_demo_profile(user_id: str) -> int:
     with connection() as db:
         result = db.execute(
@@ -610,6 +644,7 @@ def delete_demo_profile(user_id: str) -> int:
     return result.rowcount
 
 
+# Encrypt and save a personal provider API key.
 def save_api_key(user_id: str, provider: str, api_key: str) -> None:
     provider = provider.strip().lower()
     encrypted = _cipher().encrypt(api_key.strip().encode())
@@ -623,6 +658,7 @@ def save_api_key(user_id: str, provider: str, api_key: str) -> None:
         )
 
 
+# Decrypt a key for server-side model calls only.
 def api_key_for_user(user_id: str, provider: str = "groq") -> str | None:
     with connection() as db:
         row = db.execute(
@@ -637,6 +673,7 @@ def api_key_for_user(user_id: str, provider: str = "groq") -> str | None:
         return None
 
 
+# Return masked key metadata without disclosing the secret.
 def api_key_status(user_id: str, provider: str = "groq") -> dict:
     with connection() as db:
         row = db.execute(
@@ -651,6 +688,7 @@ def api_key_status(user_id: str, provider: str = "groq") -> dict:
     }
 
 
+# Read the active text and transcription provider choices.
 def provider_settings(user_id: str) -> dict:
     with connection() as db:
         row = db.execute(
@@ -660,6 +698,7 @@ def provider_settings(user_id: str) -> dict:
     return dict(row) if row else {"llm_provider": "groq", "transcription_provider": "groq"}
 
 
+# Save active providers for future interviews.
 def save_provider_settings(
     user_id: str, llm_provider: str, transcription_provider: str
 ) -> dict:
@@ -676,6 +715,7 @@ def save_provider_settings(
     return provider_settings(user_id)
 
 
+# Delete a saved provider key without touching other keys.
 def delete_api_key(user_id: str, provider: str = "groq") -> bool:
     with connection() as db:
         result = db.execute(

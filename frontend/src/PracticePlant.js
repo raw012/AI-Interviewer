@@ -1,7 +1,9 @@
+/** SVG practice plant whose leaves reflect completed interviews. */
 import React from "react";
 
 const MAX_LEAVES = 12;
 
+/** Draw one alternating branch and leaf; the newest leaf may unfurl. */
 function Leaf({ index, celebrate }) {
   const direction = index % 2 === 0 ? -1 : 1;
   const y = 106 - index * 6;
@@ -19,6 +21,7 @@ function Leaf({ index, celebrate }) {
   return (
     <g
       className={`practice-plant-leaf${celebrate ? " is-new" : ""}`}
+      data-testid={celebrate ? "leaf-new" : "leaf-grown"}
       style={{ "--branch-y": `${y}px` }}
     >
       <path d={`M 90 ${y} Q ${90 + direction * 4} ${y - 5} ${baseX} ${y - 4}`} className="practice-plant-branch" />
@@ -28,6 +31,7 @@ function Leaf({ index, celebrate }) {
   );
 }
 
+/** Keep a starter sprout visible and cap added leaves at twelve. */
 export default function PracticePlant({ completed = 0, celebrate = false }) {
   const count = Math.max(0, Number(completed) || 0);
   const visibleLeaves = Math.min(count, MAX_LEAVES);
@@ -42,8 +46,8 @@ export default function PracticePlant({ completed = 0, celebrate = false }) {
     >
       <ellipse cx="90" cy="151" rx="47" ry="4" className="practice-plant-shadow" />
       <path d={`M 90 118 C 88 100 93 ${top + 16} 90 ${top}`} className="practice-plant-stem" />
-      <path d="M 90 89 C 80 77 68 76 64 80 C 66 91 78 96 90 89 Z" className="practice-plant-starter-leaf" />
-      <path d="M 90 89 C 100 76 112 75 117 79 C 115 91 103 95 90 89 Z" className="practice-plant-starter-leaf" />
+      <path d="M 90 89 C 80 77 68 76 64 80 C 66 91 78 96 90 89 Z" className="practice-plant-starter-leaf" data-testid="leaf-starter" />
+      <path d="M 90 89 C 100 76 112 75 117 79 C 115 91 103 95 90 89 Z" className="practice-plant-starter-leaf" data-testid="leaf-starter" />
       {Array.from({ length: visibleLeaves }, (_, index) => (
         <Leaf key={index} index={index} celebrate={celebrate && index === visibleLeaves - 1} />
       ))}

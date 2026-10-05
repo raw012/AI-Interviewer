@@ -1,3 +1,5 @@
+"""Check that Qwen region choices send requests to matching endpoints."""
+
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
@@ -5,7 +7,10 @@ from providers import complete_text
 
 
 class QwenProviderTests(TestCase):
+    """Provider adapter tests without outbound API calls."""
+
     def test_qwen_regions_use_their_matching_endpoints(self):
+        """Both Qwen regions use the same model at distinct URLs."""
         endpoints = {
             "qwen_cn": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
             "qwen_intl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions",

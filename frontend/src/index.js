@@ -1,3 +1,4 @@
+/** Mount the React app and optionally report browser performance metrics. */
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';

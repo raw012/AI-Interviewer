@@ -1,3 +1,4 @@
+/** Shared desktop sidebar and mobile bottom navigation. */
 import React from "react";
 import { IconHome2, IconFileCv, IconHistory, IconKey } from "@tabler/icons-react";
 
@@ -8,6 +9,7 @@ const ITEMS = [
   { page: "api-settings", label: "API settings", Icon: IconKey },
 ];
 
+/** Render the same destinations in responsive navigation shells. */
 export default function AppNavigation({ page, setPage }) {
   const links = ITEMS.map(({ page: destination, label, Icon }) => (
     <button

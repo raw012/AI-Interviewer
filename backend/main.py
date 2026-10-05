@@ -1,3 +1,5 @@
+"""FastAPI routes for accounts, providers, interview sessions, and review."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -109,14 +111,17 @@ SPECIAL_TOPICS = [
 TOPIC_BY_KEY = {item["key"]: item for item in SPECIAL_TOPICS}
 
 
+# Combine built-in training topics with account-specific topics.
 def topic_catalog(user_id: str) -> list[dict]:
     return [{**item, "custom": False} for item in SPECIAL_TOPICS] + list_user_topics(user_id)
 
 
+# Resolve a topic only if it is available to this account.
 def topic_for_user(user_id: str, key: str) -> dict | None:
     return next((item for item in topic_catalog(user_id) if item["key"] == key), None)
 
 
+# Prefer the user's saved key, then the server's fallback key.
 def resolved_api_key(user_id: str, provider: str = "groq") -> str:
     personal_key = api_key_for_user(user_id, provider)
     environment_key = os.getenv(f"{provider.upper()}_API_KEY", "").strip()
@@ -129,6 +134,7 @@ def resolved_api_key(user_id: str, provider: str = "groq") -> str:
     return key
 
 
+# Resolve the active provider and key for text or transcription.
 def provider_runtime(user_id: str, capability: str) -> tuple[str, str]:
     settings = provider_settings(user_id)
     provider = settings[
@@ -139,14 +145,17 @@ def provider_runtime(user_id: str, capability: str) -> tuple[str, str]:
     return provider, resolved_api_key(user_id, provider)
 
 
+# Return a timezone-aware timestamp for interview deadlines.
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# Clamp the interview countdown to zero.
 def seconds_remaining(session: dict) -> int:
     return max(0, int((session["deadline_at"] - utc_now()).total_seconds()))
 
 
+# Authenticate a bearer token on protected routes.
 def current_user(authorization: str | None = Header(default=None)) -> dict:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Please sign in")
@@ -156,10 +165,12 @@ def current_user(authorization: str | None = Header(default=None)) -> dict:
     return user
 
 
+# Pair a new bearer token with safe account fields.
 def token_response(user: dict) -> dict:
     return {"token": issue_token(user["id"]), "user": user}
 
 
+# Read text from an uploaded PDF for interview prompts.
 def extract_resume_text(pdf: bytes) -> str:
     try:
         reader = PdfReader(BytesIO(pdf))
@@ -168,6 +179,7 @@ def extract_resume_text(pdf: bytes) -> str:
         raise HTTPException(status_code=400, detail="Unable to read this PDF resume") from exc
 
 
+# Reject unknown sessions or sessions owned by another account.
 def owned_session(session_id: str, user_id: str) -> dict:
     session = sessions.get(session_id)
     if not session or session["user_id"] != user_id:
@@ -176,11 +188,13 @@ def owned_session(session_id: str, user_id: str) -> dict:
 
 
 @app.get("/health")
+# Report whether the API process is reachable.
 def health() -> dict:
     return {"ok": True}
 
 
 @app.post("/auth/register")
+# Create an account and return its first session token.
 def register(request: dict) -> dict:
     try:
         user = create_user(
@@ -194,6 +208,7 @@ def register(request: dict) -> dict:
 
 
 @app.post("/auth/login")
+# Authenticate an existing account.
 def login(request: dict) -> dict:
     user = authenticate_user(
         str(request.get("email", "")), str(request.get("password", ""))
@@ -204,16 +219,19 @@ def login(request: dict) -> dict:
 
 
 @app.get("/auth/me")
+# Return the currently authenticated account.
 def me(user: dict = Depends(current_user)) -> dict:
     return user
 
 
 @app.get("/topics")
+# List selectable training topics.
 def topics(user: dict = Depends(current_user)) -> dict:
     return {"topics": topic_catalog(user["id"])}
 
 
 @app.post("/topics")
+# Add a custom topic for this account.
 def add_topic(request: dict, user: dict = Depends(current_user)) -> dict:
     try:
         return create_user_topic(
@@ -224,6 +242,7 @@ def add_topic(request: dict, user: dict = Depends(current_user)) -> dict:
 
 
 @app.get("/resume/status")
+# Tell the UI whether a reusable PDF is saved.
 def resume_status(user: dict = Depends(current_user)) -> dict:
     resume = resume_for_user(user["id"])
     if not resume:
@@ -236,6 +255,7 @@ def resume_status(user: dict = Depends(current_user)) -> dict:
 
 
 @app.post("/resume")
+# Validate, extract, and save an uploaded PDF resume.
 async def upload_resume(
     file: UploadFile = File(...), user: dict = Depends(current_user)
 ) -> dict:
@@ -258,11 +278,13 @@ async def upload_resume(
 
 
 @app.delete("/resume")
+# Remove a saved resume on request.
 def remove_resume(user: dict = Depends(current_user)) -> dict:
     return {"ok": delete_resume(user["id"])}
 
 
 @app.get("/history")
+# List past interviews for the history page.
 def interview_history(user: dict = Depends(current_user)) -> dict:
     return {
         "interviews": list_interviews(user["id"], None),
@@ -271,6 +293,7 @@ def interview_history(user: dict = Depends(current_user)) -> dict:
 
 
 @app.get("/history/{session_id}/answers")
+# Return question, answer, and feedback detail for one session.
 def past_interview_answers(session_id: str, user: dict = Depends(current_user)) -> dict:
     answers = interview_answers(user["id"], session_id)
     if answers is None:
@@ -279,11 +302,13 @@ def past_interview_answers(session_id: str, user: dict = Depends(current_user)) 
 
 
 @app.get("/memory")
+# Return the model's long-term memory about this user.
 def learning_memory(user: dict = Depends(current_user)) -> dict:
     return {"items": list_memory_items(user["id"])}
 
 
 @app.get("/dashboard")
+# Aggregate account progress for the signed-in home page.
 def dashboard(user: dict = Depends(current_user)) -> dict:
     catalog = {item["key"]: item["name"] for item in topic_catalog(user["id"])}
     skills = skill_statistics(user["id"])
@@ -309,6 +334,7 @@ def dashboard(user: dict = Depends(current_user)) -> dict:
 
 
 @app.post("/profile/demo")
+# Seed a sample profile for a new account.
 def add_demo_profile(user: dict = Depends(current_user)) -> dict:
     return {
         "inserted": seed_demo_profile(user["id"]),
@@ -317,6 +343,7 @@ def add_demo_profile(user: dict = Depends(current_user)) -> dict:
 
 
 @app.delete("/profile/demo")
+# Remove the account's sample profile values.
 def remove_demo_profile(user: dict = Depends(current_user)) -> dict:
     return {
         "deleted": delete_demo_profile(user["id"]),
@@ -325,6 +352,7 @@ def remove_demo_profile(user: dict = Depends(current_user)) -> dict:
 
 
 @app.get("/settings/api-key")
+# Return legacy Groq key status without exposing the key.
 def get_api_key_settings(user: dict = Depends(current_user)) -> dict:
     status = api_key_status(user["id"])
     environment_key = os.getenv("GROQ_API_KEY", "").strip()
@@ -335,6 +363,7 @@ def get_api_key_settings(user: dict = Depends(current_user)) -> dict:
 
 
 @app.get("/settings/providers")
+# Return provider capabilities and masked connection states.
 def get_provider_settings(user: dict = Depends(current_user)) -> dict:
     active = provider_settings(user["id"])
     providers = []
@@ -355,6 +384,7 @@ def get_provider_settings(user: dict = Depends(current_user)) -> dict:
 
 
 @app.put("/settings/providers/{provider}/key")
+# Store an individual provider key after basic input validation.
 def update_provider_key(
     provider: str, request: dict, user: dict = Depends(current_user)
 ) -> dict:
@@ -368,6 +398,7 @@ def update_provider_key(
 
 
 @app.post("/settings/providers/{provider}/test")
+# Make a live API call to verify a typed or saved provider key.
 def test_provider_key(
     provider: str, request: dict, user: dict = Depends(current_user)
 ) -> dict:
@@ -385,6 +416,7 @@ def test_provider_key(
 
 
 @app.delete("/settings/providers/{provider}/key")
+# Remove one saved provider key.
 def remove_provider_key(provider: str, user: dict = Depends(current_user)) -> dict:
     if provider not in PROVIDERS:
         raise HTTPException(status_code=404, detail="Unsupported provider")
@@ -392,6 +424,7 @@ def remove_provider_key(provider: str, user: dict = Depends(current_user)) -> di
 
 
 @app.put("/settings/providers/active")
+# Select providers for text generation and audio transcription.
 def update_active_providers(
     request: dict, user: dict = Depends(current_user)
 ) -> dict:
@@ -405,6 +438,7 @@ def update_active_providers(
 
 
 @app.put("/settings/api-key")
+# Support the older Groq-only API-key route.
 def update_api_key(request: dict, user: dict = Depends(current_user)) -> dict:
     api_key = str(request.get("api_key", "")).strip()
     if not api_key.startswith("gsk_") or len(api_key) < 20:
@@ -414,6 +448,7 @@ def update_api_key(request: dict, user: dict = Depends(current_user)) -> dict:
 
 
 @app.post("/settings/api-key/test")
+# Verify a Groq key through the legacy settings route.
 def test_api_key(request: dict, user: dict = Depends(current_user)) -> dict:
     supplied = str(request.get("api_key", "")).strip()
     api_key = supplied or resolved_api_key(user["id"])
@@ -425,11 +460,13 @@ def test_api_key(request: dict, user: dict = Depends(current_user)) -> dict:
 
 
 @app.delete("/settings/api-key")
+# Delete a Groq key through the legacy settings route.
 def remove_api_key(user: dict = Depends(current_user)) -> dict:
     return {"ok": delete_api_key(user["id"], "groq")}
 
 
 @app.post("/recording-review")
+# Transcribe and evaluate an uploaded real-world interview recording.
 async def recording_review(
     file: UploadFile = File(...), user: dict = Depends(current_user)
 ) -> dict:
@@ -509,6 +546,7 @@ async def recording_review(
 
 
 @app.post("/start")
+# Create a timed interview and generate its opening question.
 def start_interview(request: dict, user: dict = Depends(current_user)) -> dict:
     provider_runtime(user["id"], "llm")
     provider_runtime(user["id"], "transcription")
@@ -576,6 +614,7 @@ def start_interview(request: dict, user: dict = Depends(current_user)) -> dict:
 
 
 @app.post("/cancel/{session_id}")
+# Cancel an active session without evaluating an unanswered prompt.
 def cancel_active_interview(
     session_id: str, user: dict = Depends(current_user)
 ) -> dict:
@@ -586,6 +625,7 @@ def cancel_active_interview(
 
 
 @app.post("/upload/{session_id}")
+# Save a recorded answer, evaluate it, and decide whether to continue.
 async def upload_answer(
     session_id: str,
     finish: bool = False,
@@ -685,6 +725,7 @@ async def upload_answer(
         raise HTTPException(status_code=500, detail=f"Processing failed: {exc}") from exc
 
 
+# Build bounded prompt context and request the next interview question.
 def generate_new_question(session: dict) -> str:
     topic_info = session.get("topic_info") or TOPIC_BY_KEY.get(session["topic"], {})
     recent_context = "No previous question and answer pairs in this interview."
@@ -740,6 +781,7 @@ Requirements:
     return complete_text(provider, api_key, prompt)
 
 
+# Finalize a session and persist its overall score.
 def mark_session_complete(session: dict) -> float:
     scores = [item["evaluation"].get("score", 0) for item in session["history"]]
     overall = round(sum(scores) / len(scores), 1) if scores else 0
@@ -747,6 +789,7 @@ def mark_session_complete(session: dict) -> float:
     return overall
 
 
+# Shape the final review data returned to the UI.
 def summary_payload(session: dict, overall_score: float, transcript: str = "") -> dict:
     payload = {
         "session_id": session["session_id"],
@@ -777,6 +820,7 @@ def summary_payload(session: dict, overall_score: float, transcript: str = "") -
 
 
 @app.get("/summary/{session_id}")
+# Return final feedback for an owned interview.
 def get_interview_summary(
     session_id: str, user: dict = Depends(current_user)
 ) -> dict:
@@ -789,6 +833,7 @@ def get_interview_summary(
 
 
 @app.post("/feedback/{session_id}/{question_number}")
+# Save the user's judgment about question relevance.
 def question_feedback(
     session_id: str,
     question_number: int,
@@ -811,6 +856,7 @@ def question_feedback(
     return {"ok": True}
 
 
+# Choose supportive feedback text from the overall score.
 def encouragement(score: float) -> str:
     if score >= 80:
         return "Excellent performance. You demonstrated strong knowledge and communication."

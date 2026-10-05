@@ -56,6 +56,7 @@ Users can also create account-specific custom training topics.
 
 - First-time setup asks whether the user already has a key or needs one. The latter path links to Groq's API-key page; both paths test a key before saving it.
 - Returning users see their current interview and transcription connections first, with options to change, test, or remove keys and reopen the guide.
+- The top-left arrow leaves the current key-entry/help step first; from the API settings overview, it returns to the page that opened settings.
 - Interview generation supports Groq, OpenAI, Anthropic, Google Gemini, and Qwen (China and International endpoints). The provider must match the service and region that issued the key. Transcription currently supports Groq and OpenAI, so other interview providers require a second key for spoken answers.
 - Keys are encrypted before local database storage.
 - The complete key is never returned to the browser after saving.
@@ -145,21 +146,31 @@ origin behind a TLS reverse proxy or a private-origin tunnel; do not expose the
 Uvicorn development server directly to the internet.
 Set `REACT_APP_API_URL` at build time only if the API uses a different origin.
 
-## Verification
+## Verification and CI
 
-Build the frontend:
+Run the frontend checks before deployment:
 
 ```bash
 cd frontend
+CI=true npm test -- --watch=false --runInBand
+npm run lint
 npm run build
 ```
 
-Check backend imports:
+On the T7 drive, npm removes only verified macOS AppleDouble `._` sidecars before these commands. These files are metadata, not application code; otherwise Jest and ESLint may try to parse them as JavaScript.
+
+Check the backend and run its unit tests:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 backend/.venv/bin/python -m py_compile \
-  backend/main.py backend/storage.py backend/evaluator.py backend/speech.py
+PYTHONPATH=backend python3 -m unittest discover -s backend -p 'test_*.py'
+python3 -m py_compile backend/main.py backend/storage.py backend/evaluator.py backend/providers.py backend/speech.py
 ```
+
+The GitHub Actions workflow in `.github/workflows/ci.yml` repeats the frontend and backend checks on pushes and pull requests. A passing GitHub commit is not an automatic production deployment: the ieng6 server currently runs a separate checkout-free copy of the app and must be updated and health-checked separately. Restarts end any interview currently held in backend memory.
+
+### Redeploy to ieng6
+
+After the checks pass and `main` is pushed, run `bash scripts/deploy-ieng6.sh` from the repository root on a machine with access to `raw012@ieng6.ucsd.edu`. The script builds the committed release, uploads it over SSH, backs up the previous code and frontend build on the server, restarts only FastAPI, and checks both local and public health. It never replaces `backend/data` or `backend/videos`. The server's Cloudflare tunnel and existing five-minute process watchdog remain unchanged. A failed activation restores the previous code and build. This deployment step is deliberately manual; the repository does not contain a GitHub SSH private key or deployment secret.
 
 ## Privacy notes
 

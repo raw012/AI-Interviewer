@@ -48,6 +48,7 @@ PROVIDERS = {
 
 
 def complete_text(provider: str, api_key: str, prompt: str) -> str:
+    """Send one text prompt through the selected provider's API."""
     provider = provider.lower()
     compatible_bases = {
         "groq": "https://api.groq.com/openai/v1",
@@ -108,6 +109,7 @@ def complete_text(provider: str, api_key: str, prompt: str) -> str:
 
 
 def transcribe_file(provider: str, api_key: str, audio_path: str) -> str:
+    """Transcribe an audio file with Groq or OpenAI."""
     if provider not in {"groq", "openai"}:
         raise ValueError(f"{PROVIDERS.get(provider, {}).get('name', provider)} does not support transcription")
     base = "https://api.groq.com/openai/v1" if provider == "groq" else "https://api.openai.com/v1"
@@ -126,4 +128,5 @@ def transcribe_file(provider: str, api_key: str, audio_path: str) -> str:
 
 
 def test_provider(provider: str, api_key: str) -> None:
+    """Make a lightweight real request to validate a provider key."""
     complete_text(provider, api_key, "Reply with exactly: connected")

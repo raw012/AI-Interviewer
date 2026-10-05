@@ -1,3 +1,4 @@
+/** Signed-in app flow: account, provider setup, practice, and review. */
 import React, { useEffect, useRef, useState } from "react";
 import AppNavigation from "./AppNavigation";
 import PracticePlant from "./PracticePlant";
@@ -7,6 +8,7 @@ import "./App.css";
 const API_URL = process.env.REACT_APP_API_URL ||
   (process.env.NODE_ENV === "development" ? "http://localhost:8000" : window.location.origin);
 
+/** Send a request to FastAPI and normalize its error message for the UI. */
 async function apiRequest(path, token, options = {}) {
   const headers = new Headers(options.headers || {});
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -18,6 +20,7 @@ async function apiRequest(path, token, options = {}) {
   return response;
 }
 
+/** Own the page state and interview lifecycle for the single-page app. */
 function App() {
   const [token, setToken] = useState(() => localStorage.getItem("interviewer_token") || "");
   const [user, setUser] = useState(null);
@@ -26,6 +29,7 @@ function App() {
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [page, setPage] = useState("dashboard");
+  const [apiSettingsReturnPage, setApiSettingsReturnPage] = useState("dashboard");
   const videoRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const streamRef = useRef(null);
@@ -72,6 +76,7 @@ function App() {
   const [interviewTimeLeft, setInterviewTimeLeft] = useState(30 * 60);
   const [interviewTimeExpired, setInterviewTimeExpired] = useState(false);
 
+  /** Format a countdown as minutes and two-digit seconds. */
   const formatTime = (seconds) => {
     const safeSeconds = Math.max(0, seconds);
     const minutes = Math.floor(safeSeconds / 60);
@@ -86,6 +91,26 @@ function App() {
   const connectedProviders = providerConfig.providers.filter(isConnected);
   const needsTranscription = isConnected(activeLlm) && !isConnected(activeTranscription);
   const hasInterviewSource = mode === "special" || resumeStatus.has_resume || Boolean(jobDescription.trim());
+
+  /** Remember where settings was opened from so its exit arrow can return there. */
+  const navigateToPage = (destination) => {
+    if (destination === "api-settings" && page !== "api-settings") setApiSettingsReturnPage(page);
+    if (page === "api-settings" && destination !== "api-settings") {
+      setKeySetupPath("");
+      setEditingConnection(false);
+    }
+    setPage(destination);
+  };
+
+  /** Leave the current setup step first, then leave settings on the next click. */
+  const exitApiSettings = () => {
+    if (keySetupPath || editingConnection) {
+      setKeySetupPath("");
+      setEditingConnection(false);
+      return;
+    }
+    setPage(apiSettingsReturnPage);
+  };
 
   useEffect(() => {
     if (!user?.id) return;
@@ -106,18 +131,21 @@ function App() {
     localStorage.setItem(`interview_prefs:${user.id}`, JSON.stringify({ mode, topic, durationMinutes, jobDescription }));
   }, [user?.id, preferencesRestoredFor, mode, topic, durationMinutes, jobDescription]);
 
+  /** Persist the login token and show the authenticated app. */
   const rememberSession = (data) => {
     localStorage.setItem("interviewer_token", data.token);
     setToken(data.token);
     setUser(data.user);
   };
 
+  /** Clear account-specific UI state when the user signs out. */
   const signOut = () => {
     localStorage.removeItem("interviewer_token");
     setToken("");
     setUser(null);
     setProviderConfigLoaded(false);
     setProviderConfig({ providers: [], llm_provider: "groq", transcription_provider: "groq" });
+    setApiSettingsReturnPage("dashboard");
     setKeySetupPath("");
     setEditingConnection(false);
     setPreferencesRestoredFor("");
@@ -126,6 +154,7 @@ function App() {
     setPage("dashboard");
   };
 
+  /** Submit the current sign-in or registration form. */
   const submitAuth = async (event) => {
     event.preventDefault();
     setAuthBusy(true);
@@ -188,6 +217,7 @@ function App() {
       .finally(() => setProviderConfigLoaded(true));
   }, [token]);
 
+  /** Create a focused training topic for this account. */
   const addCustomTopic = async (event) => {
     event.preventDefault();
     setTopicBusy(true);
@@ -208,6 +238,7 @@ function App() {
     }
   };
 
+  /** Verify a previously saved or newly typed provider key. */
   const testProviderKey = async (provider) => {
     setProviderBusy(provider);
     setProviderMessages((current) => ({ ...current, [provider]: "" }));
@@ -226,6 +257,7 @@ function App() {
     }
   };
 
+  /** Test a new key before saving it and selecting its provider. */
   const connectProviderKey = async () => {
     const apiKey = (providerInputs[selectedProvider] || "").trim();
     if (!apiKey) return;
@@ -265,6 +297,7 @@ function App() {
     }
   };
 
+  /** Remove one saved key after user confirmation. */
   const removeProviderKey = async (provider) => {
     if (!window.confirm("Remove this saved API key?")) return;
     setProviderBusy(provider);
@@ -281,6 +314,7 @@ function App() {
     }
   };
 
+  /** Save the selected interview or transcription provider. */
   const setActiveProviders = async (field, value) => {
     const next = { ...providerConfig, [field]: value };
     setProviderConfig(next);
@@ -295,6 +329,7 @@ function App() {
     }
   };
 
+  /** Upload and save the account's default PDF resume. */
   const uploadResume = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -313,6 +348,7 @@ function App() {
     }
   };
 
+  /** Load answer details only when a past interview is expanded. */
   const loadHistoryAnswers = async (sessionId) => {
     if (historyAnswers[sessionId] || historyLoading) return;
     setHistoryLoading(sessionId);
@@ -361,10 +397,11 @@ function App() {
   }, [page]);
 
   // ================= START INTERVIEW =================
+  /** Start a timed interview using the current practice settings. */
   const startInterview = async () => {
     if (!providersReady) {
       setInterviewError("Connect an interview intelligence provider and a transcription provider before starting.");
-      setPage("api-settings");
+      navigateToPage("api-settings");
       return;
     }
     if (mode === "general" && !jobDescription.trim() && !resumeStatus.has_resume) {
@@ -409,6 +446,7 @@ function App() {
   };
 
   // ================= RECORDING =================
+  /** Capture an answer and upload it for transcription and feedback. */
   const startRecording = () => {
     if (!streamRef.current) { alert("Camera not ready"); return; }
 
@@ -472,7 +510,7 @@ function App() {
       } catch (err) {
         setInterviewError(err.message);
         if (err.message.includes("API key") || err.message.includes("provider")) {
-          setPage("api-settings");
+          navigateToPage("api-settings");
         }
       } finally {
         setIsProcessing(false);
@@ -483,6 +521,7 @@ function App() {
     setTimeLeft(120);
   };
 
+  /** Stop the current answer; optionally finish after it is evaluated. */
   const stopRecording = (finishInterview = false) => {
     finishAfterAnswerRef.current = finishInterview;
     if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
@@ -491,6 +530,7 @@ function App() {
     setLiveTranscript("");
   };
 
+  /** Leave an interview without saving the unanswered question. */
   const exitInterview = async () => {
     if (!window.confirm("Exit this interview? The current unanswered question will not be saved.")) return;
     discardRecordingRef.current = true;
@@ -555,6 +595,7 @@ function App() {
     return () => clearInterval(timer);
   }, [interviewEndsAt, page]);
 
+  /** Save the user's judgment of a question's relevance. */
   const sendQuestionFeedback = async (questionNumber, relevance, issueType) => {
     try {
       await apiRequest(`/feedback/${sessionId}/${questionNumber}`, token, {
@@ -657,9 +698,9 @@ function App() {
     const selectedMetadata = providerConfig.providers.find((item) => item.key === selectedProvider);
     return (
       <div className="app-shell settings-page">
-        <AppNavigation page={page} setPage={setPage} />
+        <AppNavigation page={page} setPage={navigateToPage} />
         <main className="app-main"><div className="app-main-top"><span>{user.name || user.email}</span><button type="button" onClick={signOut}>Sign out</button></div><div className="settings-container">
-          <button type="button" className="settings-exit" aria-label="Exit API settings to Home" onClick={() => { setKeySetupPath(""); setEditingConnection(false); setPage("dashboard"); }}><IconArrowLeft size={21} stroke={1.9} aria-hidden="true" /></button>
+          <button type="button" className="settings-exit" aria-label="Go back from API settings" onClick={exitApiSettings}><IconArrowLeft size={21} stroke={1.9} aria-hidden="true" /></button>
           <header><p className="dashboard-eyebrow">YOUR CONNECTION</p><h1>API settings</h1><p>{connectedProviders.length ? "Your interview connection is ready to manage here." : "Connect an AI service once, then focus on your interviews."}</p></header>
           {interviewError && <p className="inline-error" role="alert">{interviewError}</p>}
           {showOnboarding && <section className="api-onboarding" aria-label="Choose how to connect">
@@ -691,7 +732,7 @@ function App() {
     const nextMode = mode === "special" ? topics.find((item) => item.key === topic)?.name || "Specialized training" : "General interview";
     return (
       <div className="app-shell">
-        <AppNavigation page={page} setPage={setPage} />
+        <AppNavigation page={page} setPage={navigateToPage} />
         <main className={`app-main${page === "dashboard" && !providersReady ? " needs-provider" : ""}`}>
           <div className="app-main-top"><span>{user.name || user.email}</span><button type="button" onClick={signOut}>Sign out</button></div>
           {page === "dashboard" && <>
@@ -707,8 +748,8 @@ function App() {
             {!providersReady && providerConfigLoaded && <section className="connect-guide" aria-labelledby="connect-guide-heading">
               <div className="connect-guide-heading"><p className="dashboard-eyebrow">ONE-TIME SETUP</p><h2 id="connect-guide-heading">Connect your AI providers</h2><p>Both services need to be ready before your first interview.</p></div>
               <div className="connect-guide-requirements">
-                <div><span className="connect-guide-icon"><IconKey size={26} stroke={1.8} aria-hidden="true" /></span><span><strong>Interview intelligence</strong><small>Creates questions and personalized feedback.</small></span>{isConnected(activeLlm) ? <b className="is-ready">Ready</b> : <button type="button" aria-label="Connect interview intelligence" onClick={() => setPage("api-settings")}>Connect<span aria-hidden="true"> →</span></button>}</div>
-                <div><span className="connect-guide-icon"><IconMicrophone size={26} stroke={1.8} aria-hidden="true" /></span><span><strong>Audio transcription</strong><small>Turns your answers into text for review.</small></span>{isConnected(activeTranscription) ? <b className="is-ready">Ready</b> : <button type="button" aria-label="Connect audio transcription" onClick={() => setPage("api-settings")}>Connect<span aria-hidden="true"> →</span></button>}</div>
+                <div><span className="connect-guide-icon"><IconKey size={26} stroke={1.8} aria-hidden="true" /></span><span><strong>Interview intelligence</strong><small>Creates questions and personalized feedback.</small></span>{isConnected(activeLlm) ? <b className="is-ready">Ready</b> : <button type="button" aria-label="Connect interview intelligence" onClick={() => navigateToPage("api-settings")}>Connect<span aria-hidden="true"> →</span></button>}</div>
+                <div><span className="connect-guide-icon"><IconMicrophone size={26} stroke={1.8} aria-hidden="true" /></span><span><strong>Audio transcription</strong><small>Turns your answers into text for review.</small></span>{isConnected(activeTranscription) ? <b className="is-ready">Ready</b> : <button type="button" aria-label="Connect audio transcription" onClick={() => navigateToPage("api-settings")}>Connect<span aria-hidden="true"> →</span></button>}</div>
               </div>
             </section>}
             <button className="btn-primary quick-start" onClick={hasInterviewSource ? startInterview : () => setPage("setup")} disabled={!providersReady || isProcessing || !providerConfigLoaded}>{isProcessing ? "Preparing interview…" : !providersReady ? "Start interview" : hasInterviewSource ? "Start interview" : "Choose an interview focus"}</button>
@@ -733,7 +774,7 @@ function App() {
           <div className="user-menu">
             <span>{user.name || user.email}</span>
             <button onClick={() => setPage("dashboard")}>Dashboard</button>
-            <button onClick={() => setPage("api-settings")}>API settings</button>
+            <button onClick={() => navigateToPage("api-settings")}>API settings</button>
             <button onClick={signOut}>Sign out</button>
           </div>
         </nav>

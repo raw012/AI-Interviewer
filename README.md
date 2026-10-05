@@ -123,14 +123,23 @@ npm start
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Hosted deployment
+## Production hosting
 
-Build the frontend with `npm run build`, then start FastAPI from `backend/` with
-`python -m uvicorn main:app --host 127.0.0.1 --port 8000`. When
-`frontend/build/index.html` exists, FastAPI serves the frontend and API from
-the same origin. Set `REACT_APP_API_URL` at build time only if the API uses a
-different origin. A public deployment needs an HTTPS reverse proxy to the
-FastAPI port and a process manager that keeps the backend running.
+Build the frontend, then serve the React application and FastAPI API from one
+origin. FastAPI uses `frontend/build` by default; set `FRONTEND_BUILD_DIR` when
+the build is stored elsewhere:
+
+```bash
+cd frontend && npm run build && cd ..
+cd backend
+FRONTEND_BUILD_DIR="$(pwd)/../frontend/build" \
+  .venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+In production, the frontend sends API requests to its own HTTPS origin. Put that
+origin behind a TLS reverse proxy or a private-origin tunnel; do not expose the
+Uvicorn development server directly to the internet.
+Set `REACT_APP_API_URL` at build time only if the API uses a different origin.
 
 ## Verification
 

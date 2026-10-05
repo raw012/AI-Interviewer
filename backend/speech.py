@@ -1,4 +1,5 @@
 import ffmpeg
+import imageio_ffmpeg
 from pathlib import Path
 from providers import transcribe_file
 
@@ -9,7 +10,7 @@ def extract_audio(video_path: str) -> str:
         ffmpeg
         .input(video_path)
         .output(audio_path, format="wav")
-        .run(overwrite_output=True)
+        .run(cmd=imageio_ffmpeg.get_ffmpeg_exe(), overwrite_output=True)
     )
 
     return audio_path

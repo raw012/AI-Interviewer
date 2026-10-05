@@ -821,6 +821,13 @@ def encouragement(score: float) -> str:
     return "Keep practicing. Your feedback will help distinguish knowledge gaps from mismatched questions."
 
 
-FRONTEND_BUILD = Path(__file__).resolve().parent.parent / "frontend" / "build"
-if (FRONTEND_BUILD / "index.html").is_file():
-    app.mount("/", StaticFiles(directory=FRONTEND_BUILD, html=True), name="frontend")
+frontend_build_dir = Path(
+    os.getenv("FRONTEND_BUILD_DIR", "").strip()
+    or Path(__file__).resolve().parent.parent / "frontend" / "build"
+)
+if (frontend_build_dir / "index.html").is_file():
+    app.mount(
+        "/",
+        StaticFiles(directory=frontend_build_dir, html=True),
+        name="frontend",
+    )

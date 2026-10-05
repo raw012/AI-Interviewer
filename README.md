@@ -10,7 +10,7 @@ The application is built with React, FastAPI, and SQLite. Interview generation c
 
 - The primary action is starting an interview. Your last mode, topic, duration, and job description are reused for a one-click start when a source is available.
 - Without working interview and transcription providers, the connection card becomes the main action and Start stays disabled. The card disappears when both providers are ready.
-- A practice plant grows leaves outward as interviews are completed; the newest leaf unfurls on the feedback screen. Reduced-motion settings disable the animation.
+- A small flat SVG practice plant lives inside the "Your practice grows" card. Its stem and leaves grow outward with completed interviews; the newest leaf unfurls on the feedback screen. Reduced-motion settings disable the animation.
 - Desktop uses a compact sidebar; mobile uses a bottom tab bar for Home, Resume, Past interviews, and API settings.
 - Profile and recording-review pages are hidden from the current navigation. Existing stored data and backend routes are preserved.
 

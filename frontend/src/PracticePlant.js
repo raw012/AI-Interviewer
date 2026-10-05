@@ -1,40 +1,61 @@
 import React from "react";
 
-const LEAVES = [
-  { x: "15%", y: "12%", angle: -42 },
-  { x: "72%", y: "12%", angle: 31 },
-  { x: "3%", y: "43%", angle: -70 },
-  { x: "82%", y: "43%", angle: 56 },
-  { x: "25%", y: "49%", angle: -30 },
-  { x: "74%", y: "52%", angle: 38 },
-  { x: "30%", y: "26%", angle: -39 },
-  { x: "60%", y: "31%", angle: 35 },
-  { x: "8%", y: "32%", angle: -58 },
-  { x: "77%", y: "29%", angle: 51 },
-  { x: "20%", y: "56%", angle: -35 },
-  { x: "69%", y: "58%", angle: 43 },
-  { x: "20%", y: "5%", angle: -35 },
-  { x: "67%", y: "5%", angle: 32 },
-  { x: "1%", y: "52%", angle: -73 },
-  { x: "85%", y: "52%", angle: 61 },
-  { x: "35%", y: "44%", angle: -30 },
-  { x: "61%", y: "47%", angle: 34 },
-];
+const MAX_LEAVES = 12;
+
+function Leaf({ index, celebrate }) {
+  const direction = index % 2 === 0 ? -1 : 1;
+  const y = 106 - index * 6;
+  const length = 24 + Math.floor(index / 2) * 3;
+  const baseX = 90 + direction * 9;
+  const tipX = 90 + direction * (length + 15);
+  const tipY = y - 18;
+  const leafPath = [
+    `M ${baseX} ${y - 4}`,
+    `Q ${baseX + direction * 10} ${y - 22} ${tipX} ${tipY - 7}`,
+    `Q ${tipX - direction * 3} ${tipY + 8} ${baseX} ${y - 4}`,
+    "Z",
+  ].join(" ");
+
+  return (
+    <g
+      className={`practice-plant-leaf${celebrate ? " is-new" : ""}`}
+      style={{ "--branch-y": `${y}px` }}
+    >
+      <path d={`M 90 ${y} Q ${90 + direction * 4} ${y - 5} ${baseX} ${y - 4}`} className="practice-plant-branch" />
+      <path d={leafPath} className={index % 4 < 2 ? "practice-plant-leaf-fill" : "practice-plant-leaf-fill is-light"} />
+      <path d={`M ${baseX} ${y - 4} Q ${90 + direction * (length - 1)} ${tipY - 3} ${tipX} ${tipY - 7}`} className="practice-plant-vein" />
+    </g>
+  );
+}
 
 export default function PracticePlant({ completed = 0, celebrate = false }) {
-  const visibleLeaves = Math.min(Math.max(completed, 0), LEAVES.length);
+  const count = Math.max(0, Number(completed) || 0);
+  const visibleLeaves = Math.min(count, MAX_LEAVES);
+  const top = 113 - visibleLeaves * 6.5;
+
   return (
-    <div className={`practice-plant${celebrate ? " is-celebrating" : ""}`} role="img" aria-label={`A practice plant grown by ${completed} completed interviews`}>
-      <img className="practice-plant-base" src="/plant-assets/plant-base.png" alt="" />
-      {LEAVES.slice(0, visibleLeaves).map((leaf, index) => (
-        <img
-          className="practice-plant-leaf"
-          src="/plant-assets/new-leaf.png"
-          alt=""
-          key={index}
-          style={{ left: leaf.x, top: leaf.y, "--leaf-angle": `${leaf.angle}deg`, "--leaf-order": index }}
-        />
-      ))}
-    </div>
+    <svg
+      className={`practice-plant${celebrate ? " is-celebrating" : ""}`}
+      viewBox="25 10 130 145"
+      role="img"
+      aria-label={`A small practice plant grown by ${count} completed interviews`}
+    >
+      <ellipse cx="90" cy="151" rx="36" ry="4" className="practice-plant-shadow" />
+      {visibleLeaves > 0 ? (
+        <>
+          <path d={`M 90 118 C 88 100 93 ${top + 16} 90 ${top}`} className="practice-plant-stem" />
+          {Array.from({ length: visibleLeaves }, (_, index) => (
+            <Leaf key={index} index={index} celebrate={celebrate && index === visibleLeaves - 1} />
+          ))}
+        </>
+      ) : (
+        <ellipse cx="90" cy="113" rx="5" ry="3" className="practice-plant-seed" />
+      )}
+      <path d="M 58 119 H 122 L 116 145 Q 115 150 109 150 H 71 Q 65 150 64 145 Z" className="practice-plant-pot" />
+      <path d="M 56 117 Q 56 114 60 114 H 120 Q 124 114 124 117 V 121 H 56 Z" className="practice-plant-pot-rim" />
+      <circle cx="79" cy="133" r="1.6" className="practice-plant-face" />
+      <circle cx="101" cy="133" r="1.6" className="practice-plant-face" />
+      <path d="M 85 139 Q 90 143 95 139" className="practice-plant-smile" />
+    </svg>
   );
 }

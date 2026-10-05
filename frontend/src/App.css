@@ -311,14 +311,23 @@ button, input, textarea, select { font: inherit; }
 .quick-settings > span:not(:first-child)::before { content: '·'; display: inline-block; margin: 0 15px; color: #96a2b5; }
 .quick-settings button, .recent-heading button, .recent-interview button { border: 0; background: none; color: #165fc9; font-size: 13px; font-weight: 700; cursor: pointer; }
 .quick-settings button { margin-left: 20px; white-space: nowrap; }
-.practice-hero-plant { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; min-width: 0; padding-bottom: 10px; }
-.practice-hero-plant strong { color: #263b55; font-size: 13px; }
-.practice-hero-plant > span { margin-top: 5px; color: #71809a; font-size: 12px; }
-.practice-plant { position: relative; width: min(100%, 340px); aspect-ratio: 1.28; }
-.practice-plant-base { width: 100%; height: 100%; object-fit: contain; display: block; }
-.practice-plant-leaf { position: absolute; width: 22%; height: auto; transform-origin: 20% 85%; transform: rotate(var(--leaf-angle)); filter: drop-shadow(0 2px 2px rgba(12,62,31,.12)); }
-.practice-plant.is-celebrating .practice-plant-leaf:last-child { animation: leaf-unfurl 1.4s cubic-bezier(.2,.88,.25,1.16) both; }
-@keyframes leaf-unfurl { 0% { opacity: 0; transform: scale(.12) rotate(calc(var(--leaf-angle) - 24deg)); } 55% { opacity: 1; } 100% { transform: scale(1) rotate(var(--leaf-angle)); } }
+.practice-hero-plant { display: grid; grid-template-columns: 94px minmax(0, 1fr); grid-template-rows: 1fr 1fr; align-items: center; align-self: end; width: min(100%, 276px); min-height: 113px; padding: 7px 14px 7px 5px; border: 1px solid #e7edf5; border-radius: 16px; background: #f8fbff; }
+.practice-hero-plant strong { align-self: end; color: #304966; font-size: 12px; }
+.practice-hero-plant > span { align-self: start; margin-top: 3px; color: #78889b; font-size: 11px; }
+.practice-plant { display: block; grid-row: 1 / span 2; width: 94px; height: 99px; overflow: visible; }
+.practice-plant-shadow { fill: #dce6f0; opacity: .48; }
+.practice-plant-stem, .practice-plant-branch { fill: none; stroke: #6f9c85; stroke-width: 3; stroke-linecap: round; }
+.practice-plant-branch { stroke-width: 2.5; }
+.practice-plant-leaf-fill { fill: #7eac91; }
+.practice-plant-leaf-fill.is-light { fill: #a2c4a9; }
+.practice-plant-vein { fill: none; stroke: #d7ead9; stroke-width: 1.2; stroke-linecap: round; opacity: .75; }
+.practice-plant-seed { fill: #8fad91; }
+.practice-plant-pot { fill: #d8e7f8; stroke: #adc8e8; stroke-width: 1.4; }
+.practice-plant-pot-rim { fill: #b9d3f2; }
+.practice-plant-face { fill: #6485ae; }
+.practice-plant-smile { fill: none; stroke: #6485ae; stroke-width: 1.8; stroke-linecap: round; }
+.practice-plant.is-celebrating .practice-plant-leaf.is-new { transform-box: view-box; transform-origin: 90px var(--branch-y); animation: leaf-unfurl .95s cubic-bezier(.2,.82,.28,1.04) both; }
+@keyframes leaf-unfurl { from { opacity: 0; transform: scale(.08) rotate(-10deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
 .connect-guide { margin-top: 22px; display: grid; gap: 20px; max-width: 1100px; padding: 28px 32px; border-radius: 16px; background: #edf4ff; }
 .connect-guide h2 { font-size: 24px; color: #18314f; margin: 5px 0 8px; }
 .connect-guide-heading > p:last-child { color: #5b6d85; font-size: 14px; line-height: 1.55; }
@@ -372,7 +381,7 @@ button, input, textarea, select { font: inherit; }
 .transcript-control button { border: 0; background: transparent; color: #1f62c4; font-size: 12px; font-weight: 700; cursor: pointer; }
 .transcript-panel { width: min(100%, 520px); max-height: 130px; overflow-y: auto; border-radius: 10px; background: white; border: 1px solid #e3eaf3; padding: 13px 15px; color: #344c69; font-size: 13px; line-height: 1.5; }
 .result-celebration { display: flex; align-items: center; gap: 24px; padding: 12px 0 24px; }
-.result-celebration .practice-plant { flex: 0 0 180px; }
+.result-celebration .practice-plant { flex: 0 0 94px; }
 .result-celebration p:last-child { color: #65748b; line-height: 1.5; margin-top: 7px; }
 
 @media (max-width: 760px) {
@@ -383,13 +392,18 @@ button, input, textarea, select { font: inherit; }
   .mobile-tabs .app-nav-link svg { width: 21px; height: 21px; }
   .app-main { padding: 16px 20px 78px; }
   .app-main-top { height: 28px; }
-  .practice-hero { display: flex; flex-direction: column-reverse; align-items: stretch; margin-top: 10px; gap: 4px; }
+  .app-main.needs-provider { display: flex; flex-direction: column; }
+  .needs-provider .app-main-top { order: -1; }
+  .needs-provider .practice-hero { display: contents; }
+  .needs-provider .practice-hero-copy { order: 0; margin-top: 10px; }
+  .needs-provider .connect-guide { order: 1; margin-top: 16px; }
+  .needs-provider .quick-start { order: 2; }
+  .needs-provider .practice-hero-plant { order: 3; margin-top: 24px; }
+  .needs-provider .recent-section { order: 4; }
+  .practice-hero { display: flex; flex-direction: column; align-items: stretch; margin-top: 10px; gap: 12px; }
   .practice-hero-copy h1 { font-size: clamp(31px, 8vw, 43px); }
   .practice-hero-copy > p:not(.dashboard-eyebrow) { font-size: 14px; margin: 12px 0 20px; }
-  .practice-hero-plant { align-self: center; width: 185px; padding: 0; }
-  .needs-provider .practice-hero-plant { display: none; }
-  .practice-plant { width: 185px; }
-  .practice-hero-plant strong, .practice-hero-plant > span { font-size: 10px; }
+  .practice-hero-plant { align-self: flex-start; width: min(100%, 276px); }
   .quick-settings { width: 100%; font-size: 11px; }
   .quick-settings > span:not(:first-child)::before { margin: 0 6px; }
   .quick-settings button { margin-left: auto; font-size: 11px; }
@@ -405,7 +419,7 @@ button, input, textarea, select { font: inherit; }
   .simple-panel { align-items: flex-start; flex-direction: column; }
   .settings-page .settings-container { padding-top: 40px; }
   .provider-selects, .provider-grid { grid-template-columns: 1fr; }
-  .result-celebration .practice-plant { flex-basis: 100px; }
+  .result-celebration .practice-plant { flex-basis: 80px; width: 80px; height: 85px; }
   .result-celebration { gap: 12px; }
 }
 

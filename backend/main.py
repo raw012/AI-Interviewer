@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import os
 import uuid
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -11,6 +12,7 @@ load_dotenv()
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pypdf import PdfReader
 
 from evaluator import analyze_recording, score_answer, update_interview_summary
@@ -21,6 +23,7 @@ from storage import (
     api_key_status,
     authenticate_user,
     cancel_interview,
+    completed_interview_count,
     complete_interview,
     create_interview,
     create_user_topic,
@@ -30,6 +33,7 @@ from storage import (
     delete_resume,
     init_db,
     issue_token,
+    interview_answers,
     list_interviews,
     list_memory_items,
     list_recording_reviews,
@@ -261,9 +265,17 @@ def remove_resume(user: dict = Depends(current_user)) -> dict:
 @app.get("/history")
 def interview_history(user: dict = Depends(current_user)) -> dict:
     return {
-        "interviews": list_interviews(user["id"]),
+        "interviews": list_interviews(user["id"], None),
         "recording_reviews": list_recording_reviews(user["id"]),
     }
+
+
+@app.get("/history/{session_id}/answers")
+def past_interview_answers(session_id: str, user: dict = Depends(current_user)) -> dict:
+    answers = interview_answers(user["id"], session_id)
+    if answers is None:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    return {"answers": answers}
 
 
 @app.get("/memory")
@@ -287,7 +299,7 @@ def dashboard(user: dict = Depends(current_user)) -> dict:
         "interviews": interviews,
         "recording_reviews": recording_reviews,
         "summary": {
-            "interviews": len(list_interviews(user["id"], 1000)),
+            "interviews": completed_interview_count(user["id"]),
             "recording_reviews": len(list_recording_reviews(user["id"], 1000)),
             "active_memories": len(memories),
             "weak_points": sum(1 for item in memories if item["kind"] == "weak_point"),
@@ -334,7 +346,9 @@ def get_provider_settings(user: dict = Depends(current_user)) -> dict:
                 "key": key,
                 **metadata,
                 **status,
-                "server_fallback_available": bool(environment_key),
+                "server_fallback_available": bool(
+                    environment_key and environment_key != "paste_your_new_groq_api_key_here"
+                ),
             }
         )
     return {"providers": providers, **active}
@@ -496,6 +510,8 @@ async def recording_review(
 
 @app.post("/start")
 def start_interview(request: dict, user: dict = Depends(current_user)) -> dict:
+    provider_runtime(user["id"], "llm")
+    provider_runtime(user["id"], "transcription")
     duration_minutes = int(request.get("duration_minutes", 30))
     if duration_minutes not in ALLOWED_DURATIONS:
         raise HTTPException(status_code=400, detail="Duration must be 30 or 60 minutes")
@@ -803,3 +819,8 @@ def encouragement(score: float) -> str:
     if score >= 60:
         return "Solid effort. Use the improvement notes to guide the next focused session."
     return "Keep practicing. Your feedback will help distinguish knowledge gaps from mismatched questions."
+
+
+FRONTEND_BUILD = Path(__file__).resolve().parent.parent / "frontend" / "build"
+if (FRONTEND_BUILD / "index.html").is_file():
+    app.mount("/", StaticFiles(directory=FRONTEND_BUILD, html=True), name="frontend")

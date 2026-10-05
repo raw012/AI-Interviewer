@@ -1,16 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
+import AppNavigation from "./AppNavigation";
+import PracticePlant from "./PracticePlant";
+import { IconKey, IconMicrophone } from "@tabler/icons-react";
 import "./App.css";
 
 const API_URL = process.env.REACT_APP_API_URL ||
-  (process.env.NODE_ENV === "development" ? "http://localhost:8000" : `${window.location.origin}/api`);
-const MEMORY_LABELS = {
-  expertise: "Area of expertise",
-  communication_pattern: "Communication pattern",
-  working_style: "Working style",
-  preference: "Interview preference",
-  strong_point: "Knowledge strength",
-  weak_point: "Growth area",
-};
+  (process.env.NODE_ENV === "development" ? "http://localhost:8000" : window.location.origin);
 
 async function apiRequest(path, token, options = {}) {
   const headers = new Headers(options.headers || {});
@@ -21,41 +16,6 @@ async function apiRequest(path, token, options = {}) {
     throw new Error(payload.detail || payload.error || `Request failed: ${response.status}`);
   }
   return response;
-}
-
-function RadarChart({ skills }) {
-  const size = 340;
-  const center = size / 2;
-  const radius = 112;
-  const axes = skills.length >= 3 ? skills : [
-    { name: "Technical Depth", score: 0 },
-    { name: "Communication", score: 0 },
-    { name: "Structured Thinking", score: 0 },
-    { name: "Problem Solving", score: 0 },
-    { name: "Project Articulation", score: 0 },
-    { name: "Adaptability", score: 0 },
-  ];
-  const point = (index, value = 100) => {
-    const angle = -Math.PI / 2 + (index * Math.PI * 2) / axes.length;
-    const distance = radius * (value / 100);
-    return [center + Math.cos(angle) * distance, center + Math.sin(angle) * distance];
-  };
-  const polygon = (value) => axes.map((_, index) => point(index, value).join(",")).join(" ");
-  const values = axes.map((skill, index) => point(index, skill.score || 0).join(",")).join(" ");
-  return (
-    <svg className="radar-chart" viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Skill profile radar chart">
-      {[25, 50, 75, 100].map((level) => <polygon key={level} points={polygon(level)} className="radar-grid" />)}
-      {axes.map((_, index) => {
-        const [x, y] = point(index);
-        return <line key={index} x1={center} y1={center} x2={x} y2={y} className="radar-axis" />;
-      })}
-      <polygon points={values} className="radar-value" />
-      {axes.map((skill, index) => {
-        const [x, y] = point(index, 126);
-        return <text key={skill.name} x={x} y={y} className="radar-label" textAnchor={x < center - 8 ? "end" : x > center + 8 ? "start" : "middle"}>{skill.name.length > 17 ? `${skill.name.slice(0, 16)}…` : skill.name}</text>;
-      })}
-    </svg>
-  );
 }
 
 function App() {
@@ -78,19 +38,23 @@ function App() {
   const [mode, setMode] = useState("general");
   const [topic, setTopic] = useState("java_oop");
   const [topics, setTopics] = useState([]);
-  const [memoryItems, setMemoryItems] = useState([]);
   const [resumeStatus, setResumeStatus] = useState({ has_resume: false });
   const [resumeBusy, setResumeBusy] = useState(false);
-  const [recordingFile, setRecordingFile] = useState(null);
-  const [reviewBusy, setReviewBusy] = useState(false);
   const [dashboardData, setDashboardData] = useState({ skills: [], profile: { dimensions: [], has_demo_data: false }, memories: [], interviews: [], recording_reviews: [], summary: {} });
   const [customTopic, setCustomTopic] = useState({ name: "", description: "" });
   const [topicBusy, setTopicBusy] = useState(false);
   const [providerConfig, setProviderConfig] = useState({ providers: [], llm_provider: "groq", transcription_provider: "groq" });
+  const [providerConfigLoaded, setProviderConfigLoaded] = useState(false);
   const [providerInputs, setProviderInputs] = useState({});
   const [providerBusy, setProviderBusy] = useState("");
   const [providerMessages, setProviderMessages] = useState({});
   const [durationMinutes, setDurationMinutes] = useState(30);
+  const [preferencesRestoredFor, setPreferencesRestoredFor] = useState("");
+  const [historyAnswers, setHistoryAnswers] = useState({});
+  const [historyInterviews, setHistoryInterviews] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState("");
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [interviewError, setInterviewError] = useState("");
 
   const [recording, setRecording] = useState(false);
   const [question, setQuestion] = useState("");
@@ -112,6 +76,31 @@ function App() {
     return `${minutes}:${String(remainder).padStart(2, "0")}`;
   };
 
+  const activeLlm = providerConfig.providers.find((item) => item.key === providerConfig.llm_provider);
+  const activeTranscription = providerConfig.providers.find((item) => item.key === providerConfig.transcription_provider);
+  const isConnected = (provider) => Boolean(provider?.configured || provider?.server_fallback_available);
+  const providersReady = providerConfigLoaded && isConnected(activeLlm) && isConnected(activeTranscription);
+  const hasInterviewSource = mode === "special" || resumeStatus.has_resume || Boolean(jobDescription.trim());
+
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(`interview_prefs:${user.id}`) || "{}");
+      if (saved.mode === "general" || saved.mode === "special") setMode(saved.mode);
+      if (saved.topic) setTopic(saved.topic);
+      if (saved.durationMinutes === 30 || saved.durationMinutes === 60) setDurationMinutes(saved.durationMinutes);
+      if (typeof saved.jobDescription === "string") setJobDescription(saved.jobDescription);
+    } catch (error) {
+      console.warn("Could not read interview preferences", error);
+    }
+    setPreferencesRestoredFor(user.id);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || preferencesRestoredFor !== user.id) return;
+    localStorage.setItem(`interview_prefs:${user.id}`, JSON.stringify({ mode, topic, durationMinutes, jobDescription }));
+  }, [user?.id, preferencesRestoredFor, mode, topic, durationMinutes, jobDescription]);
+
   const rememberSession = (data) => {
     localStorage.setItem("interviewer_token", data.token);
     setToken(data.token);
@@ -122,6 +111,11 @@ function App() {
     localStorage.removeItem("interviewer_token");
     setToken("");
     setUser(null);
+    setProviderConfigLoaded(false);
+    setProviderConfig({ providers: [], llm_provider: "groq", transcription_provider: "groq" });
+    setPreferencesRestoredFor("");
+    setHistoryAnswers({});
+    setHistoryInterviews(null);
     setPage("dashboard");
   };
 
@@ -160,22 +154,31 @@ function App() {
   }, [token, page]);
 
   useEffect(() => {
+    if (!token || page !== "history") return;
+    apiRequest("/history", token)
+      .then((response) => response.json())
+      .then((data) => setHistoryInterviews(data.interviews || []))
+      .catch((error) => setInterviewError(`Could not load past interviews: ${error.message}`));
+  }, [token, page]);
+
+  useEffect(() => {
     if (!token) return;
     Promise.all([
       apiRequest("/topics", token).then((response) => response.json()),
       apiRequest("/resume/status", token).then((response) => response.json()),
-      apiRequest("/memory", token).then((response) => response.json()),
       apiRequest("/dashboard", token).then((response) => response.json()),
-      apiRequest("/settings/providers", token).then((response) => response.json()),
     ])
-      .then(([topicData, resumeData, memoryData, dashboard, providers]) => {
+      .then(([topicData, resumeData, dashboard]) => {
         setTopics(topicData.topics || []);
         setResumeStatus(resumeData);
-        setMemoryItems(memoryData.items || []);
         setDashboardData(dashboard);
-        setProviderConfig(providers);
       })
       .catch((error) => console.error("Setup data error:", error));
+    apiRequest("/settings/providers", token)
+      .then((response) => response.json())
+      .then((providers) => setProviderConfig(providers))
+      .catch((error) => setInterviewError(`Could not load API settings: ${error.message}`))
+      .finally(() => setProviderConfigLoaded(true));
   }, [token]);
 
   const addCustomTopic = async (event) => {
@@ -195,16 +198,6 @@ function App() {
       alert(error.message);
     } finally {
       setTopicBusy(false);
-    }
-  };
-
-  const updateDemoProfile = async (method) => {
-    try {
-      const response = await apiRequest("/profile/demo", token, { method });
-      const result = await response.json();
-      setDashboardData((current) => ({ ...current, profile: result.profile }));
-    } catch (error) {
-      alert(error.message);
     }
   };
 
@@ -294,35 +287,23 @@ function App() {
     }
   };
 
-  const reviewRecording = async () => {
-    if (!recordingFile) {
-      alert("Please choose an interview audio or video file first.");
-      return;
-    }
-    setReviewBusy(true);
+  const loadHistoryAnswers = async (sessionId) => {
+    if (historyAnswers[sessionId] || historyLoading) return;
+    setHistoryLoading(sessionId);
     try {
-      const formData = new FormData();
-      formData.append("file", recordingFile);
-      const response = await apiRequest("/recording-review", token, {
-        method: "POST",
-        body: formData,
-      });
+      const response = await apiRequest(`/history/${sessionId}/answers`, token);
       const data = await response.json();
-      setSessionId(data.session_id);
-      setSummaryData(data);
-      setPage("results");
-      const memoryResponse = await apiRequest("/memory", token);
-      setMemoryItems((await memoryResponse.json()).items || []);
+      setHistoryAnswers((current) => ({ ...current, [sessionId]: data.answers || [] }));
     } catch (error) {
-      alert(error.message);
+      setInterviewError(error.message);
     } finally {
-      setReviewBusy(false);
+      setHistoryLoading("");
     }
   };
 
   // ================= CAMERA SETUP =================
   useEffect(() => {
-    if (!token || !["setup", "question", "recording"].includes(page)) return undefined;
+    if (!token || !["question", "recording"].includes(page)) return undefined;
     if (streamRef.current?.getTracks().some((track) => track.readyState === "live")) {
       if (videoRef.current) videoRef.current.srcObject = streamRef.current;
       return undefined;
@@ -355,12 +336,24 @@ function App() {
 
   // ================= START INTERVIEW =================
   const startInterview = async () => {
+    if (!providersReady) {
+      setInterviewError("Connect an interview intelligence provider and a transcription provider before starting.");
+      setPage("api-settings");
+      return;
+    }
     if (mode === "general" && !jobDescription.trim() && !resumeStatus.has_resume) {
       alert("Add a job description or upload your resume first.");
       return;
     }
     try {
+      setInterviewError("");
       setIsProcessing(true);
+      if (!streamRef.current?.getTracks().some((track) => track.readyState === "live")) {
+        streamRef.current = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: true,
+        });
+      }
       const res = await apiRequest("/start", token, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -451,7 +444,10 @@ function App() {
           setPage("question");
         }
       } catch (err) {
-        alert(`Error: ${err.message}`);
+        setInterviewError(err.message);
+        if (err.message.includes("API key") || err.message.includes("provider")) {
+          setPage("api-settings");
+        }
       } finally {
         setIsProcessing(false);
       }
@@ -631,13 +627,11 @@ function App() {
 
   if (page === "api-settings") {
     return (
-      <div className="page-bg settings-page">
-        <nav className="navbar">
-          <div className="navbar-logo"><div className="logo-icon">AI</div><span className="logo-text">Interview Coach</span></div>
-          <div className="user-menu"><button onClick={() => setPage("dashboard")}>Dashboard</button><button onClick={signOut}>Sign out</button></div>
-        </nav>
-        <main className="settings-container">
-          <header><p className="dashboard-eyebrow">SETTINGS</p><h1>API settings</h1><p>Connect your own AI provider key for interviews, scoring, transcription, and recording review.</p></header>
+      <div className="app-shell settings-page">
+        <AppNavigation page={page} setPage={setPage} signOut={signOut} user={user} />
+        <main className="app-main"><div className="settings-container">
+          <header><p className="dashboard-eyebrow">ONE-TIME SETUP</p><h1>API settings</h1><p>Connect one provider for interview questions and feedback, and one for audio transcription. Groq or OpenAI can serve both roles with a single key.</p></header>
+          {interviewError && <p className="inline-error" role="alert">{interviewError}</p>}
           <section className="settings-card provider-routing">
             <div className="card-heading"><div><h2>Active providers</h2><p>Choose one provider for interview intelligence and one for speech-to-text.</p></div></div>
             <div className="provider-selects">
@@ -645,7 +639,7 @@ function App() {
               <label>Audio transcription<select value={providerConfig.transcription_provider} onChange={(event) => setActiveProviders("transcription_provider", event.target.value)}>{providerConfig.providers.filter((item) => item.transcription).map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label>
             </div>
           </section>
-          <div className="key-security-note"><strong>Your keys stay private.</strong><p>Each key is encrypted before local database storage. Complete keys are never returned to the browser. Anthropic and Gemini can power interview intelligence; transcription currently supports Groq and OpenAI.</p></div>
+          <div className="key-security-note"><strong>Your keys stay private.</strong><p>Each key is encrypted before database storage. Complete keys are never returned to the browser. Audio transcription currently supports Groq and OpenAI.</p></div>
           <div className="provider-grid">
             {providerConfig.providers.map((provider) => {
               const connected = provider.configured || provider.server_fallback_available;
@@ -663,82 +657,45 @@ function App() {
               );
             })}
           </div>
-        </main>
+        </div></main>
       </div>
     );
   }
 
-  if (page === "dashboard") {
-    const profileDimensions = dashboardData.profile?.dimensions || [];
-    const radarSkills = profileDimensions.map((item) => ({ name: item.name, score: Number(item.score || 0) }));
+  if (["dashboard", "resume", "history"].includes(page)) {
+    const completedCount = dashboardData.summary.interviews || 0;
+    const completedInterviews = dashboardData.interviews.filter((item) => item.status === "completed");
+    const latest = completedInterviews[0];
+    const nextMode = mode === "special" ? topics.find((item) => item.key === topic)?.name || "Specialized training" : "General interview";
     return (
-      <div className="page-bg dashboard-page">
-        <nav className="navbar">
-          <div className="navbar-logo"><div className="logo-icon">AI</div><span className="logo-text">Interview Coach</span></div>
-          <div className="user-menu"><span>{user.name || user.email}</span><button onClick={() => setPage("api-settings")}>API settings</button><button onClick={signOut}>Sign out</button></div>
-        </nav>
-        <main className="dashboard-container">
-          <header className="dashboard-hero">
-            <div><p className="dashboard-eyebrow">YOUR INTERVIEW PROFILE</p><h1>Welcome back, {user.name || user.email.split("@")[0]}</h1><p>Review what the coach remembers, track your skill profile, and choose what to practice next.</p></div>
-            <button className="btn-primary dashboard-start" onClick={() => setPage("setup")}>Start an interview →</button>
-          </header>
-          <section className="metric-grid">
-            <article><strong>{dashboardData.summary.interviews || 0}</strong><span>Interviews</span></article>
-            <article><strong>{dashboardData.summary.recording_reviews || 0}</strong><span>Recording reviews</span></article>
-            <article><strong>{dashboardData.summary.strong_points || 0}</strong><span>Demonstrated strengths</span></article>
-            <article><strong>{dashboardData.summary.weak_points || 0}</strong><span>Areas to revisit</span></article>
-          </section>
-          <section className="dashboard-grid">
-            <article className="dashboard-card radar-card">
-              <div className="card-heading"><div><h2>Candidate profile</h2><p>Cross-domain abilities inferred from your recent interview answers.</p></div>{dashboardData.profile?.has_demo_data && <span>Sample data</span>}</div>
-              <RadarChart skills={radarSkills} />
-              {!profileDimensions.some((item) => item.score != null) && <div className="profile-empty"><p className="empty-note">Complete your first interview to begin building a real profile, or preview the dashboard with clearly labeled sample data.</p><button className="btn-secondary" onClick={() => updateDemoProfile("POST")}>Preview sample profile</button></div>}
-              {dashboardData.profile?.has_demo_data && <button className="clear-demo" onClick={() => updateDemoProfile("DELETE")}>Clear sample profile data</button>}
-            </article>
-            <article className="dashboard-card strengths-card">
-              <div className="card-heading"><div><h2>What AI remembers about you</h2><p>Durable traits learned from interviews—not a transcript dump.</p></div></div>
-              <div className="memory-snapshot">{dashboardData.memories.slice(0, 6).map((item) => <article key={item.id}><span>{MEMORY_LABELS[item.kind] || item.kind.replaceAll("_", " ")}{item.is_demo ? " · Sample" : ""}</span><p>{item.content}</p><small>{item.topic || "General"} · {Math.round(item.confidence * 100)}% confidence</small></article>)}{dashboardData.memories.length === 0 && <div className="memory-empty"><strong>No interview memory yet</strong><p>After an interview, AI will remember demonstrated expertise, communication patterns, working style, preferences, strengths, and recurring growth areas.</p></div>}</div>
-            </article>
-          </section>
-          <section className="dashboard-card memory-browser">
-              <div className="card-heading"><div><h2>AI memory</h2><p>What the coach has learned about you, with confidence and source context.</p></div><span>{dashboardData.memories.length} active</span></div>
-            <div className="memory-list">
-              {dashboardData.memories.map((item) => (
-                <article className={`memory-row ${item.kind}`} key={item.id}>
-                  <span className="memory-kind">{MEMORY_LABELS[item.kind] || item.kind.replaceAll("_", " ")}</span>
-                  <div><strong>{item.content}{item.is_demo ? <em className="sample-tag">Sample</em> : null}</strong><p>{item.topic || "General interview"} · seen {item.times_seen} time{item.times_seen === 1 ? "" : "s"} · confidence {Math.round(item.confidence * 100)}%</p>{item.question && <small>Evidence question: {item.question}</small>}</div>
-                  <div className="memory-source">{item.interview_date ? new Date(item.interview_date).toLocaleDateString() : "Imported memory"}</div>
-                </article>
-              ))}
-              {dashboardData.memories.length === 0 && <p className="empty-note">The coach has not stored any verified memory yet.</p>}
-            </div>
-          </section>
-          <section className="dashboard-card history-card">
-            <div className="card-heading"><div><h2>Interview history and context</h2><p>Open a session to inspect the compact context retained from it.</p></div></div>
-            <div className="history-list">
-              {dashboardData.interviews.map((interview) => (
-                <details key={interview.session_id}>
-                  <summary><div><strong>{interview.mode === "special" ? topics.find((item) => item.key === interview.topic)?.name || "Specialized training" : interview.mode === "recording" ? "Recording review" : "General interview"}</strong><span>{new Date(interview.created_at).toLocaleString()} · {interview.questions_answered} answers</span></div><b>{interview.overall_score == null ? "In progress" : `${interview.overall_score}%`}</b></summary>
-                  <div className="history-context"><strong>Retained context</strong><p>{interview.cumulative_summary || "No compact context was generated for this session."}</p></div>
-                  <div className="history-memories"><strong>Memories from this interview</strong>{dashboardData.memories.filter((item) => item.session_id === interview.session_id).map((item) => <span key={item.id} className={item.kind}>• {item.content}</span>)}{!dashboardData.memories.some((item) => item.session_id === interview.session_id) && <span>No active memory from this interview.</span>}</div>
-                </details>
-              ))}
-              {dashboardData.interviews.length === 0 && <p className="empty-note">No interview history yet.</p>}
-            </div>
-          </section>
-          {dashboardData.recording_reviews?.length > 0 && (
-            <section className="dashboard-card history-card review-history-card">
-              <div className="card-heading"><div><h2>Recording reviews</h2><p>Imported recordings are kept separate and do not count as practice interviews or profile scores.</p></div></div>
-              <div className="history-list">
-                {dashboardData.recording_reviews.map((review) => (
-                  <details key={review.session_id}>
-                    <summary><div><strong>Recording review</strong><span>{new Date(review.created_at).toLocaleString()} · {review.questions_answered} answers identified</span></div><b>{review.overall_score == null ? "Reviewed" : `${review.overall_score}%`}</b></summary>
-                    <div className="history-context"><strong>Review summary</strong><p>{review.cumulative_summary || "No summary was generated."}</p></div>
-                  </details>
-                ))}
+      <div className="app-shell">
+        <AppNavigation page={page} setPage={setPage} signOut={signOut} user={user} />
+        <main className={`app-main${page === "dashboard" && !providersReady ? " needs-provider" : ""}`}>
+          <div className="app-main-top"><span>{user.name || user.email}</span><button type="button" onClick={signOut}>Sign out</button></div>
+          {page === "dashboard" && <>
+            <section className="practice-hero">
+              <div className="practice-hero-copy">
+                <p className="dashboard-eyebrow">YOUR PRACTICE SPACE</p>
+                <h1>Ready for your next<br />mock interview?</h1>
+                <p>Practice with realistic questions and build confidence, one answer at a time.</p>
+                <div className="quick-settings"><span>{nextMode}</span><span>{durationMinutes} min</span><span>{resumeStatus.has_resume ? "Saved resume" : mode === "special" ? "Focused topic" : "No resume"}</span><button type="button" onClick={() => setPage("setup")}>Change settings</button></div>
               </div>
+              <div className="practice-hero-plant"><PracticePlant completed={completedCount} /><strong>Your practice grows</strong><span>{completedCount} completed interview{completedCount === 1 ? "" : "s"}</span></div>
             </section>
-          )}
+            {!providersReady && providerConfigLoaded && <section className="connect-guide" aria-labelledby="connect-guide-heading">
+              <div className="connect-guide-heading"><p className="dashboard-eyebrow">ONE-TIME SETUP</p><h2 id="connect-guide-heading">Connect your AI providers</h2><p>Both services need to be ready before your first interview.</p></div>
+              <div className="connect-guide-requirements">
+                <div><span className="connect-guide-icon"><IconKey size={26} stroke={1.8} aria-hidden="true" /></span><span><strong>Interview intelligence</strong><small>Creates questions and personalized feedback.</small></span><b className={isConnected(activeLlm) ? "is-ready" : ""}>{isConnected(activeLlm) ? "Ready" : "Connect"}</b></div>
+                <div><span className="connect-guide-icon"><IconMicrophone size={26} stroke={1.8} aria-hidden="true" /></span><span><strong>Audio transcription</strong><small>Turns your answers into text for review.</small></span><b className={isConnected(activeTranscription) ? "is-ready" : ""}>{isConnected(activeTranscription) ? "Ready" : "Connect"}</b></div>
+              </div>
+              <button className="btn-primary" onClick={() => setPage("api-settings")}>Connect providers</button>
+            </section>}
+            <button className="btn-primary quick-start" onClick={hasInterviewSource ? startInterview : () => setPage("setup")} disabled={!providersReady || isProcessing || !providerConfigLoaded}>{isProcessing ? "Preparing interview…" : !providersReady ? "Start interview" : hasInterviewSource ? "Start interview" : "Choose an interview focus"}</button>
+            {!hasInterviewSource && providersReady && <p className="quick-start-note">Add a resume, paste a job description, or choose a specialized topic once to enable one-click start.</p>}
+            <section className="recent-section"><div className="recent-heading"><h2>Your recent interviews</h2><button type="button" onClick={() => setPage("history")}>View all</button></div>{latest ? <article className="recent-interview"><div><strong>{latest.mode === "special" ? topics.find((item) => item.key === latest.topic)?.name || "Specialized training" : "General interview"}</strong><span>{new Date(latest.created_at).toLocaleDateString()} · {latest.questions_answered} answers</span></div><p>{latest.cumulative_summary || "A step forward in your practice."}</p><button type="button" onClick={() => setPage("history")}>Read feedback</button></article> : <p className="quiet-empty">Your first completed interview will appear here, along with a short feedback summary.</p>}</section>
+          </>}
+          {page === "resume" && <section className="simple-page"><p className="dashboard-eyebrow">YOUR MATERIALS</p><h1>Resume</h1><p>Upload a PDF once. We will use it for future general interviews until you replace it.</p><div className="simple-panel"><div><strong>{resumeStatus.has_resume ? resumeStatus.filename : "No resume saved yet"}</strong><p>{resumeStatus.has_resume ? "This is your default resume for general interviews." : "A saved resume makes future interviews faster to start."}</p></div><label className="resume-upload">{resumeBusy ? "Processing…" : resumeStatus.has_resume ? "Replace PDF" : "Upload PDF"}<input type="file" accept="application/pdf,.pdf" onChange={uploadResume} disabled={resumeBusy} /></label></div></section>}
+          {page === "history" && <section className="simple-page"><p className="dashboard-eyebrow">YOUR PROGRESS</p><h1>Past interviews</h1><p>Review each interview, its feedback summary, and your answers.</p>{interviewError && <p className="inline-error" role="alert">{interviewError}</p>}<div className="past-interviews">{(historyInterviews || []).map((interview) => <details key={interview.session_id} onToggle={(event) => { if (event.currentTarget.open) loadHistoryAnswers(interview.session_id); }}><summary><span><strong>{interview.mode === "special" ? topics.find((item) => item.key === interview.topic)?.name || "Specialized training" : "General interview"}</strong><small>{new Date(interview.created_at).toLocaleString()} · {interview.questions_answered} answers · {interview.duration_minutes} min</small></span><b>{interview.overall_score == null ? "In progress" : `${interview.overall_score}%`}</b></summary><div className="past-detail"><h3>Feedback summary</h3><p>{interview.cumulative_summary || "No feedback summary was generated."}</p>{historyLoading === interview.session_id && <p>Loading answers…</p>}{(historyAnswers[interview.session_id] || []).map((answer) => <div className="past-answer" key={answer.question_number}><strong>{answer.question_number}. {answer.question}</strong><p><b>Your answer:</b> {answer.answer}</p><p><b>What went well:</b> {answer.strengths || "No note"}</p><p><b>Improve next time:</b> {answer.improvements || "No note"}</p><small>Score {answer.score}/100 · {answer.relevance === "mismatch" ? "Marked as mismatched" : "Question fit not flagged"}</small></div>)}</div></details>)}{historyInterviews === null && <p className="quiet-empty">Loading past interviews…</p>}{historyInterviews?.length === 0 && <p className="quiet-empty">No interviews yet. Your first practice session will appear here.</p>}</div></section>}
         </main>
       </div>
     );
@@ -763,19 +720,14 @@ function App() {
         <div className="setup-container">
           <div className="hero">
             <button className="back-dashboard" onClick={() => setPage("dashboard")}>← Back to dashboard</button>
-            <h1 className="hero-title">Ace your technical interview</h1>
-            <p className="hero-sub">AI-powered practice tailored to your job description. Get real-time feedback.</p>
+            <h1 className="hero-title">Choose your interview focus</h1>
+            <p className="hero-sub">Choose it once. We will remember your settings for next time.</p>
           </div>
           <div className="setup-card">
-            <div className="camera-preview-wrap">
-              <video ref={videoRef} autoPlay muted className="camera-preview-video" />
-              <div className="camera-badge">📹 Camera Preview</div>
-            </div>
             <div className="setup-form">
               <div className="mode-switch">
                 <button className={mode === "general" ? "active" : ""} onClick={() => setMode("general")}>General</button>
                 <button className={mode === "special" ? "active" : ""} onClick={() => setMode("special")}>Specialized</button>
-                <button className={mode === "review" ? "active" : ""} onClick={() => setMode("review")}>Recording review</button>
               </div>
 
               {mode === "general" ? (
@@ -788,7 +740,7 @@ function App() {
                     onChange={(e) => setJobDescription(e.target.value)}
                   />
                 </div>
-              ) : mode === "special" ? (
+              ) : (
                 <div className="form-group">
                   <label className="form-label">Training topic</label>
                   <select className="form-select" value={topic} onChange={(e) => setTopic(e.target.value)}>
@@ -806,22 +758,9 @@ function App() {
                     </form>
                   </details>
                 </div>
-              ) : (
-                <div className="recording-upload-card">
-                  <strong>Upload a real interview recording</strong>
-                  <p>Supports MP3, WAV, M4A, WebM, MP4, and MOV up to 200 MB. The coach identifies Q&A pairs and creates a detailed retrospective.</p>
-                  <label className="recording-upload">
-                    {recordingFile ? recordingFile.name : "Choose audio or video"}
-                    <input
-                      type="file"
-                      accept="audio/*,video/*,.webm,.m4a"
-                      onChange={(event) => setRecordingFile(event.target.files?.[0] || null)}
-                    />
-                  </label>
-                </div>
               )}
 
-              {mode !== "review" && <div className="resume-card">
+              {mode === "general" && <div className="resume-card">
                 <div>
                   <strong>Default PDF resume</strong>
                   <p>{resumeStatus.has_resume ? `Currently using: ${resumeStatus.filename}` : "No resume saved. Upload once and reuse it across interviews."}</p>
@@ -831,39 +770,23 @@ function App() {
                   <input type="file" accept="application/pdf,.pdf" onChange={uploadResume} disabled={resumeBusy} />
                 </label>
               </div>}
-              {mode !== "review" && <div className="form-group">
+              <div className="form-group">
                 <label className="form-label">Interview duration</label>
                 <select className="form-select" value={durationMinutes} onChange={(e) => setDurationMinutes(parseInt(e.target.value))}>
                   <option value={30}>30 minutes</option>
                   <option value={60}>60 minutes</option>
                 </select>
-              </div>}
+              </div>
               <button
-                className={`btn-primary${isProcessing || reviewBusy ? " btn-loading" : ""}`}
-                onClick={mode === "review" ? reviewRecording : startInterview}
-                disabled={isProcessing || reviewBusy}
+                className={`btn-primary${isProcessing ? " btn-loading" : ""}`}
+                onClick={startInterview}
+                disabled={isProcessing || !providersReady}
               >
-                {reviewBusy ? <><span className="spinner" /> Transcribing and analyzing…</> : isProcessing ? <><span className="spinner" /> Preparing…</> : mode === "review" ? "Review recording →" : mode === "special" ? "Start specialized training →" : "Start interview →"}
+                {isProcessing ? <><span className="spinner" /> Preparing…</> : mode === "special" ? "Start specialized training →" : "Start interview →"}
               </button>
+              {!providersReady && <p className="inline-error">Connect your AI providers in API settings before starting.</p>}
             </div>
           </div>
-          {memoryItems.length > 0 && (
-            <section className="memory-panel">
-              <div className="memory-heading">
-                <div><h2>Learning memory</h2><p>Future interviews revisit relevant growth areas without repeating the same questions.</p></div>
-                <span>{memoryItems.length} items</span>
-              </div>
-              <div className="memory-grid">
-                {memoryItems.slice(0, 6).map((item) => (
-                  <article className={`memory-card ${item.kind}`} key={item.id}>
-                    <div><span>{item.kind === "weak_point" ? "Needs attention" : "Strength"}</span><small>{item.topic || "General"}</small></div>
-                    <p>{item.content}</p>
-                    <footer>Seen {item.times_seen} time{item.times_seen === 1 ? "" : "s"} · {Math.round(item.confidence * 100)}% confidence</footer>
-                  </article>
-                ))}
-              </div>
-            </section>
-          )}
         </div>
       </div>
     );
@@ -947,13 +870,14 @@ function App() {
               </div>
             )}
             <div className="recording-btns">
-              <button className="btn-stop" onClick={() => stopRecording(false)}>
+              <button className="btn-stop" onClick={() => stopRecording(false)} disabled={!recording || isProcessing}>
                 <span className="stop-icon" /> Stop My Answer
               </button>
-              <button className="btn-finish" onClick={() => stopRecording(true)}>
+              <button className="btn-finish" onClick={() => stopRecording(true)} disabled={!recording || isProcessing}>
                 Finish After This Answer
               </button>
             </div>
+            {interviewError && <p className="inline-error" role="alert">{interviewError} You can exit this interview safely.</p>}
             {isProcessing && (
               <div className="processing-banner">
                 <span className="spinner spinner-dark" /> Analyzing your answer...
@@ -964,10 +888,10 @@ function App() {
           <div className="recording-right">
             <div className="video-frame">
               <video ref={videoRef} autoPlay muted className="recording-video" />
-              {liveTranscript && <div className="subtitle">{liveTranscript}</div>}
               <div className="rec-dot-wrap"><span className="rec-dot" /> REC</div>
             </div>
-            <p className="video-hint">Your camera — only you can see this</p>
+            <div className="transcript-control"><span>Your camera — only you can see this</span><button type="button" onClick={() => setShowTranscript((current) => !current)} aria-expanded={showTranscript}>{showTranscript ? "Hide live transcript" : "Show live transcript"}</button></div>
+            {showTranscript && <div className="transcript-panel" aria-live="polite">{liveTranscript || "Your words will appear here while you speak."}</div>}
           </div>
         </div>
       </div>
@@ -985,7 +909,7 @@ function App() {
           </div>
         </nav>
         <div className="results-container">
-          <h1 className="results-title">Interview Complete 🎉</h1>
+          <div className="result-celebration"><PracticePlant completed={(dashboardData.summary.interviews || 0) + 1} celebrate /><div><p className="dashboard-eyebrow">A NEW LEAF</p><h1 className="results-title">You showed up and grew.</h1><p>Each finished interview adds another leaf to your practice plant.</p></div></div>
           <p className="results-meta">{summaryData.mode === "recording" ? "Real interview recording review" : `${summaryData.duration_minutes}-minute interview`} · {summaryData.questions_answered} answers completed</p>
           <div className="score-row">
             <div className="score-card">
@@ -1037,7 +961,7 @@ function App() {
             </table>
           </div>
           <div className="results-actions">
-            <button className="btn-primary" onClick={() => { setPage("dashboard"); setJobDescription(""); setDurationMinutes(30); setSummaryData(null); setInterviewEndsAt(null); setInterviewTimeLeft(30 * 60); setInterviewTimeExpired(false); }}>Back to dashboard</button>
+            <button className="btn-primary" onClick={() => { setPage("dashboard"); setSummaryData(null); setInterviewEndsAt(null); setInterviewTimeLeft(durationMinutes * 60); setInterviewTimeExpired(false); }}>Back to home</button>
           </div>
         </div>
       </div>

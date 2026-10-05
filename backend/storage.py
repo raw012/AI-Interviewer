@@ -394,8 +394,9 @@ def save_question_feedback(
             )
 
 
-def list_interviews(user_id: str, limit: int = 20) -> list[dict]:
+def list_interviews(user_id: str, limit: int | None = 20) -> list[dict]:
     with connection() as db:
+        limit_clause = " LIMIT ?" if limit is not None else ""
         rows = db.execute(
             """SELECT i.session_id,i.mode,i.topic,i.duration_minutes,i.overall_score,
                i.status,i.created_at,i.completed_at,i.cumulative_summary,
@@ -403,8 +404,34 @@ def list_interviews(user_id: str, limit: int = 20) -> list[dict]:
                FROM interviews i LEFT JOIN answers a ON a.session_id=i.session_id
                WHERE i.user_id=? AND i.mode!='recording' AND i.status!='cancelled'
                GROUP BY i.session_id
-               ORDER BY i.created_at DESC LIMIT ?""",
-            (user_id, limit),
+               ORDER BY i.created_at DESC""" + limit_clause,
+            (user_id, limit) if limit is not None else (user_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def completed_interview_count(user_id: str) -> int:
+    with connection() as db:
+        row = db.execute(
+            "SELECT COUNT(*) AS total FROM interviews WHERE user_id=? AND mode!='recording' AND status='completed'",
+            (user_id,),
+        ).fetchone()
+    return int(row["total"])
+
+
+def interview_answers(user_id: str, session_id: str) -> list[dict] | None:
+    with connection() as db:
+        interview = db.execute(
+            "SELECT session_id FROM interviews WHERE session_id=? AND user_id=? AND mode!='recording'",
+            (session_id, user_id),
+        ).fetchone()
+        if not interview:
+            return None
+        rows = db.execute(
+            """SELECT question_number,question,answer,score,strengths,improvements,
+               relevance,issue_type FROM answers WHERE session_id=? AND user_id=?
+               ORDER BY question_number""",
+            (session_id, user_id),
         ).fetchall()
     return [dict(row) for row in rows]
 

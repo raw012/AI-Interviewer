@@ -71,6 +71,9 @@ test("first-time API setup offers a key or Groq guidance", async () => {
   expect(screen.getByRole("heading", { name: "Get a Groq API key" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /Open Groq API Keys/i })).toHaveAttribute("href", "https://console.groq.com/keys");
   expect(screen.getByRole("button", { name: "Test & save key" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Exit API settings to Home" }));
+  expect(await screen.findByRole("heading", { name: /Ready for your next mock interview/i })).toBeInTheDocument();
 });
 
 test("existing connection shows current provider instead of first-time choices", async () => {

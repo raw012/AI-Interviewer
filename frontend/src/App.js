@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import AppNavigation from "./AppNavigation";
 import PracticePlant from "./PracticePlant";
-import { IconKey, IconMicrophone } from "@tabler/icons-react";
+import { IconArrowLeft, IconKey, IconMicrophone } from "@tabler/icons-react";
 import "./App.css";
 
 const API_URL = process.env.REACT_APP_API_URL ||
@@ -659,6 +659,7 @@ function App() {
       <div className="app-shell settings-page">
         <AppNavigation page={page} setPage={setPage} />
         <main className="app-main"><div className="app-main-top"><span>{user.name || user.email}</span><button type="button" onClick={signOut}>Sign out</button></div><div className="settings-container">
+          <button type="button" className="settings-exit" aria-label="Exit API settings to Home" onClick={() => { setKeySetupPath(""); setEditingConnection(false); setPage("dashboard"); }}><IconArrowLeft size={21} stroke={1.9} aria-hidden="true" /></button>
           <header><p className="dashboard-eyebrow">YOUR CONNECTION</p><h1>API settings</h1><p>{connectedProviders.length ? "Your interview connection is ready to manage here." : "Connect an AI service once, then focus on your interviews."}</p></header>
           {interviewError && <p className="inline-error" role="alert">{interviewError}</p>}
           {showOnboarding && <section className="api-onboarding" aria-label="Choose how to connect">
@@ -671,7 +672,7 @@ function App() {
             <div className="api-current-actions"><button type="button" className="btn-secondary" onClick={() => { setEditingConnection((current) => !current); setKeySetupPath(""); setSelectedProvider(needsTranscription ? "groq" : providerConfig.llm_provider); }}>{editingConnection ? "Cancel" : needsTranscription ? "Connect transcription" : "Change connection"}</button><button type="button" className="api-text-button" onClick={() => { setKeySetupPath(keySetupPath === "need" ? "" : "need"); setSelectedProvider("groq"); }}>Need a guide?</button></div>
           </section>}
           {keySetupPath === "need" && <section className="api-guide settings-card"><p className="dashboard-eyebrow">GET STARTED</p><h2>Get a Groq API key</h2><ol><li>Create or sign in to a Groq account.</li><li>Open API Keys and create a new key.</li><li>Copy it and paste it below. We will test it before saving.</li></ol><a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Open Groq API Keys ↗</a><p>Already have a key from another service? You can choose it below instead.</p></section>}
-          {showKeyEntry && <section className="api-entry settings-card"><div className="api-entry-title"><div><p className="dashboard-eyebrow">{needsTranscription ? "FINISH SETUP" : "CONNECT A SERVICE"}</p><h2>{needsTranscription ? "Connect speech-to-text" : "Paste your API key"}</h2><p>Choose the service that issued your key. We check it before storing it.</p></div>{!connectedProviders.length && <button type="button" className="api-text-button" onClick={() => setKeySetupPath("")}>Back</button>}</div>
+          {showKeyEntry && <section className="api-entry settings-card"><div className="api-entry-title"><div><p className="dashboard-eyebrow">{needsTranscription ? "FINISH SETUP" : "CONNECT A SERVICE"}</p><h2>{needsTranscription ? "Connect speech-to-text" : "Paste your API key"}</h2><p>Choose the service that issued your key. We check it before storing it.</p></div></div>
             <label>Key provider<select value={selectedProvider} onChange={(event) => setSelectedProvider(event.target.value)}>{providerConfig.providers.filter((item) => !needsTranscription || item.transcription).map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label>
             <label>API key<input type="password" autoComplete="off" value={providerInputs[selectedProvider] || ""} onChange={(event) => setProviderInputs((current) => ({ ...current, [selectedProvider]: event.target.value }))} placeholder="Paste your API key" /></label>
             {selectedMetadata && !selectedMetadata.transcription && !isConnected(activeTranscription) && <p className="api-entry-note">{selectedMetadata.name} handles the interview. Spoken-answer transcription also needs a Groq or OpenAI key.</p>}

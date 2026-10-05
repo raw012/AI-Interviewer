@@ -249,6 +249,9 @@ button, input, textarea, select { font: inherit; }
    API SETTINGS
    ============================================= */
 .settings-container { width: min(1080px, calc(100% - 40px)); margin: 0 auto; padding: 46px 0 80px; }
+.settings-exit { width: 40px; height: 40px; display: grid; place-items: center; margin-bottom: 28px; border: 1px solid #dce7f3; border-radius: 11px; background: #f7faff; color: #2865b7; cursor: pointer; transition: background .18s ease, transform .18s ease; }
+.settings-exit:hover { background: #e9f2ff; transform: translateX(-2px); }
+.settings-exit:focus-visible { outline: 3px solid #b8d5f7; outline-offset: 2px; }
 .settings-container > header { margin-bottom: 24px; }
 .settings-container h1 { font-size: 30px; }
 .settings-container > header > p:last-child { color: var(--gray-text); margin-top: 8px; line-height: 1.5; }

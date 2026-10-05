@@ -31,7 +31,7 @@ function Leaf({ index, celebrate }) {
 export default function PracticePlant({ completed = 0, celebrate = false }) {
   const count = Math.max(0, Number(completed) || 0);
   const visibleLeaves = Math.min(count, MAX_LEAVES);
-  const top = 113 - visibleLeaves * 6.5;
+  const top = Math.min(86, 113 - visibleLeaves * 6.5);
 
   return (
     <svg
@@ -41,16 +41,12 @@ export default function PracticePlant({ completed = 0, celebrate = false }) {
       aria-label={`A practice plant grown by ${count} completed interviews`}
     >
       <ellipse cx="90" cy="151" rx="47" ry="4" className="practice-plant-shadow" />
-      {visibleLeaves > 0 ? (
-        <>
-          <path d={`M 90 118 C 88 100 93 ${top + 16} 90 ${top}`} className="practice-plant-stem" />
-          {Array.from({ length: visibleLeaves }, (_, index) => (
-            <Leaf key={index} index={index} celebrate={celebrate && index === visibleLeaves - 1} />
-          ))}
-        </>
-      ) : (
-        <ellipse cx="90" cy="113" rx="5" ry="3" className="practice-plant-seed" />
-      )}
+      <path d={`M 90 118 C 88 100 93 ${top + 16} 90 ${top}`} className="practice-plant-stem" />
+      <path d="M 90 89 C 80 77 68 76 64 80 C 66 91 78 96 90 89 Z" className="practice-plant-starter-leaf" />
+      <path d="M 90 89 C 100 76 112 75 117 79 C 115 91 103 95 90 89 Z" className="practice-plant-starter-leaf" />
+      {Array.from({ length: visibleLeaves }, (_, index) => (
+        <Leaf key={index} index={index} celebrate={celebrate && index === visibleLeaves - 1} />
+      ))}
       <path d="M 47 119 H 133 L 126 145 Q 125 150 118 150 H 62 Q 55 150 54 145 Z" className="practice-plant-pot" />
       <path d="M 45 117 Q 45 114 49 114 H 131 Q 135 114 135 117 V 121 H 45 Z" className="practice-plant-pot-rim" />
       <circle cx="79" cy="133" r="1.6" className="practice-plant-face" />

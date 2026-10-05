@@ -8,7 +8,7 @@ const ITEMS = [
   { page: "api-settings", label: "API settings", Icon: IconKey },
 ];
 
-export default function AppNavigation({ page, setPage, signOut, user }) {
+export default function AppNavigation({ page, setPage }) {
   const links = ITEMS.map(({ page: destination, label, Icon }) => (
     <button
       type="button"
@@ -27,7 +27,6 @@ export default function AppNavigation({ page, setPage, signOut, user }) {
       <aside className="app-sidebar" aria-label="Main navigation">
         <div className="app-sidebar-brand"><span className="logo-icon">AI</span><strong>Interview Coach</strong></div>
         <nav>{links}</nav>
-        <div className="app-sidebar-account"><span>{user?.name || user?.email}</span><button type="button" onClick={signOut}>Sign out</button></div>
       </aside>
       <nav className="mobile-tabs" aria-label="Main navigation">{links}</nav>
     </>

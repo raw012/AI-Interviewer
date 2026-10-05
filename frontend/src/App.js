@@ -628,8 +628,8 @@ function App() {
   if (page === "api-settings") {
     return (
       <div className="app-shell settings-page">
-        <AppNavigation page={page} setPage={setPage} signOut={signOut} user={user} />
-        <main className="app-main"><div className="settings-container">
+        <AppNavigation page={page} setPage={setPage} />
+        <main className="app-main"><div className="app-main-top"><span>{user.name || user.email}</span><button type="button" onClick={signOut}>Sign out</button></div><div className="settings-container">
           <header><p className="dashboard-eyebrow">ONE-TIME SETUP</p><h1>API settings</h1><p>Connect one provider for interview questions and feedback, and one for audio transcription. Groq or OpenAI can serve both roles with a single key.</p></header>
           {interviewError && <p className="inline-error" role="alert">{interviewError}</p>}
           <section className="settings-card provider-routing">
@@ -669,7 +669,7 @@ function App() {
     const nextMode = mode === "special" ? topics.find((item) => item.key === topic)?.name || "Specialized training" : "General interview";
     return (
       <div className="app-shell">
-        <AppNavigation page={page} setPage={setPage} signOut={signOut} user={user} />
+        <AppNavigation page={page} setPage={setPage} />
         <main className={`app-main${page === "dashboard" && !providersReady ? " needs-provider" : ""}`}>
           <div className="app-main-top"><span>{user.name || user.email}</span><button type="button" onClick={signOut}>Sign out</button></div>
           {page === "dashboard" && <>
@@ -680,15 +680,14 @@ function App() {
                 <p>Practice with realistic questions and build confidence, one answer at a time.</p>
                 <div className="quick-settings"><span>{nextMode}</span><span>{durationMinutes} min</span><span>{resumeStatus.has_resume ? "Saved resume" : mode === "special" ? "Focused topic" : "No resume"}</span><button type="button" onClick={() => setPage("setup")}>Change settings</button></div>
               </div>
-              <div className="practice-hero-plant"><PracticePlant completed={completedCount} /><strong>Your practice grows</strong><span>{completedCount} completed interview{completedCount === 1 ? "" : "s"}</span></div>
+              <div className="practice-hero-plant"><PracticePlant completed={completedCount} /><div className="practice-hero-caption"><strong>Your practice grows</strong><span>{completedCount} completed interview{completedCount === 1 ? "" : "s"}</span></div></div>
             </section>
             {!providersReady && providerConfigLoaded && <section className="connect-guide" aria-labelledby="connect-guide-heading">
               <div className="connect-guide-heading"><p className="dashboard-eyebrow">ONE-TIME SETUP</p><h2 id="connect-guide-heading">Connect your AI providers</h2><p>Both services need to be ready before your first interview.</p></div>
               <div className="connect-guide-requirements">
-                <div><span className="connect-guide-icon"><IconKey size={26} stroke={1.8} aria-hidden="true" /></span><span><strong>Interview intelligence</strong><small>Creates questions and personalized feedback.</small></span><b className={isConnected(activeLlm) ? "is-ready" : ""}>{isConnected(activeLlm) ? "Ready" : "Connect"}</b></div>
-                <div><span className="connect-guide-icon"><IconMicrophone size={26} stroke={1.8} aria-hidden="true" /></span><span><strong>Audio transcription</strong><small>Turns your answers into text for review.</small></span><b className={isConnected(activeTranscription) ? "is-ready" : ""}>{isConnected(activeTranscription) ? "Ready" : "Connect"}</b></div>
+                <div><span className="connect-guide-icon"><IconKey size={26} stroke={1.8} aria-hidden="true" /></span><span><strong>Interview intelligence</strong><small>Creates questions and personalized feedback.</small></span>{isConnected(activeLlm) ? <b className="is-ready">Ready</b> : <button type="button" aria-label="Connect interview intelligence" onClick={() => setPage("api-settings")}>Connect<span aria-hidden="true"> →</span></button>}</div>
+                <div><span className="connect-guide-icon"><IconMicrophone size={26} stroke={1.8} aria-hidden="true" /></span><span><strong>Audio transcription</strong><small>Turns your answers into text for review.</small></span>{isConnected(activeTranscription) ? <b className="is-ready">Ready</b> : <button type="button" aria-label="Connect audio transcription" onClick={() => setPage("api-settings")}>Connect<span aria-hidden="true"> →</span></button>}</div>
               </div>
-              <button className="btn-primary" onClick={() => setPage("api-settings")}>Connect providers</button>
             </section>}
             <button className="btn-primary quick-start" onClick={hasInterviewSource ? startInterview : () => setPage("setup")} disabled={!providersReady || isProcessing || !providerConfigLoaded}>{isProcessing ? "Preparing interview…" : !providersReady ? "Start interview" : hasInterviewSource ? "Start interview" : "Choose an interview focus"}</button>
             {!hasInterviewSource && providersReady && <p className="quick-start-note">Add a resume, paste a job description, or choose a specialized topic once to enable one-click start.</p>}

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import App from "./App";
 
 const jsonResponse = (data) => ({ ok: true, json: async () => data });
@@ -37,10 +37,16 @@ test("makes provider setup primary and disables Start without keys", async () =>
   render(<App />);
 
   expect(await screen.findByRole("heading", { name: "Connect your AI providers" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Connect providers" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Connect interview intelligence" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Connect audio transcription" })).toBeEnabled();
   expect(screen.getByRole("button", { name: "Start interview" })).toBeDisabled();
+  expect(screen.getAllByRole("button", { name: "Sign out" })).toHaveLength(1);
   expect(screen.queryByRole("button", { name: "Recordings" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Profile" })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Connect interview intelligence" }));
+  expect(await screen.findByRole("heading", { name: "API settings" })).toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Sign out" })).toHaveLength(1);
 });
 
 test("hides onboarding and enables one-click Start with providers ready", async () => {

@@ -57,7 +57,7 @@ Users can also create account-specific custom training topics.
 - First-time setup asks whether the user already has a key or needs one. The latter path links to Groq's API-key page; both paths test a key before saving it.
 - Returning users see their current interview and transcription connections first, with options to change, test, or remove keys and reopen the guide.
 - The top-left arrow leaves the current key-entry/help step first; from the API settings overview, it returns to the page that opened settings.
-- Interview generation supports Groq, OpenAI, Anthropic, Google Gemini, and Qwen (China and International endpoints). The provider must match the service and region that issued the key. Transcription currently supports Groq and OpenAI, so other interview providers require a second key for spoken answers.
+- Interview generation supports Groq, OpenAI, Anthropic, Google Gemini, and Qwen (China and International endpoints). The provider must match the service and region that issued the key. Groq currently uses `openai/gpt-oss-120b`; verification distinguishes rejected keys from model/permission, rate-limit, and connectivity failures. Transcription currently supports Groq and OpenAI, so other interview providers require a second key for spoken answers.
 - Keys are encrypted before local database storage.
 - The complete key is never returned to the browser after saving.
 - A personal key takes precedence over a server fallback key where one is configured.
@@ -170,7 +170,7 @@ The GitHub Actions workflow in `.github/workflows/ci.yml` repeats the frontend a
 
 ### Redeploy to ieng6
 
-After the checks pass and `main` is pushed, run `bash scripts/deploy-ieng6.sh` from the repository root on a machine with access to `raw012@ieng6.ucsd.edu`. The script builds the committed release, uploads it over SSH, backs up the previous code and frontend build on the server, restarts only FastAPI, and checks both local and public health. It never replaces `backend/data` or `backend/videos`. The server's Cloudflare tunnel and existing five-minute process watchdog remain unchanged. A failed activation restores the previous code and build. This deployment step is deliberately manual; the repository does not contain a GitHub SSH private key or deployment secret.
+After the checks pass and `main` is pushed, run `bash scripts/deploy-ieng6.sh` from the repository root on a machine with access to `raw012@ieng6.ucsd.edu`. The script builds the committed release, uploads it over SSH, backs up the previous code and frontend build on the server, and identifies the process actually listening on port 18000 rather than trusting a possibly stale PID file. It queues the new FastAPI process through the server's `at` service so it survives SSH disconnect, then checks local and public health. It never replaces `backend/data` or `backend/videos`, and leaves the Cloudflare tunnel running. A failed activation restores the previous code and build. This deployment step is deliberately manual; the repository does not contain a GitHub SSH private key or deployment secret.
 
 ## Privacy notes
 

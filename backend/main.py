@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pypdf import PdfReader
 
 from evaluator import analyze_recording, score_answer, update_interview_summary
-from providers import PROVIDERS, complete_text, test_provider
+from providers import PROVIDERS, complete_text, test_provider, verification_failure_message
 from speech import extract_audio, transcribe_audio
 from storage import (
     api_key_for_user,
@@ -410,7 +410,7 @@ def test_provider_key(
         test_provider(provider, api_key)
     except Exception as exc:
         raise HTTPException(
-            status_code=400, detail=f"The {PROVIDERS[provider]['name']} key could not be verified"
+            status_code=400, detail=verification_failure_message(provider, exc)
         ) from exc
     return {"ok": True, "message": "Connection successful"}
 

@@ -12,7 +12,7 @@ PROVIDERS = {
         "name": "Groq",
         "chat": True,
         "transcription": True,
-        "model": "llama-3.3-70b-versatile",
+        "model": "openai/gpt-oss-120b",
     },
     "openai": {
         "name": "OpenAI",
@@ -129,4 +129,26 @@ def transcribe_file(provider: str, api_key: str, audio_path: str) -> str:
 
 def test_provider(provider: str, api_key: str) -> None:
     """Make a lightweight real request to validate a provider key."""
-    complete_text(provider, api_key, "Reply with exactly: connected")
+    if not complete_text(provider, api_key, "Reply with exactly: connected"):
+        raise ValueError("Provider returned an empty verification response")
+
+
+def verification_failure_message(provider: str, error: Exception) -> str:
+    """Explain a failed connection without exposing the key or upstream response."""
+    name = PROVIDERS[provider]["name"]
+    if isinstance(error, httpx.HTTPStatusError):
+        status = error.response.status_code
+        if status == 401:
+            return f"{name} rejected this API key. Check that it is active and belongs to {name}."
+        if status == 403:
+            return f"{name} denied access. Check this project's model permissions."
+        if status == 429:
+            return f"{name} is rate-limiting requests. Try again later."
+        if status in {400, 404}:
+            return f"{name} rejected the configured model or request (HTTP {status}). Contact support if this persists."
+        if status >= 500:
+            return f"{name} is temporarily unavailable. Try again later."
+        return f"{name} could not verify the connection (HTTP {status})."
+    if isinstance(error, (httpx.TimeoutException, httpx.RequestError)):
+        return f"The server could not reach {name}. Try again later."
+    return f"{name} returned an invalid verification response. Try again later."

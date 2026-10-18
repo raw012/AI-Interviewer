@@ -12,13 +12,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pypdf import PdfReader
 
 from evaluator import analyze_recording, score_answer, update_interview_summary
-from providers import PROVIDERS, complete_text, test_provider, verification_failure_message
+from providers import PROVIDERS, complete_text, synthesize_question, test_provider, verification_failure_message
 from speech import extract_audio, transcribe_audio
 from storage import (
     api_key_for_user,
@@ -131,6 +131,16 @@ def resolved_api_key(user_id: str, provider: str = "groq") -> str:
             status_code=400,
             detail=f"Configure a {PROVIDERS[provider]['name']} API key in API Settings",
         )
+    return key
+
+
+# Voice is optional; use a personal key first and never send one to the browser.
+def optional_voice_key(user_id: str, provider: str) -> str | None:
+    key = api_key_for_user(user_id, provider)
+    if provider == "groq" and not key:
+        key = os.getenv("GROQ_API_KEY", "").strip()
+    if not key or key.startswith("your_") or key == "paste_your_new_groq_api_key_here":
+        return None
     return key
 
 
@@ -369,7 +379,7 @@ def get_provider_settings(user: dict = Depends(current_user)) -> dict:
     providers = []
     for key, metadata in PROVIDERS.items():
         status = api_key_status(user["id"], key)
-        environment_key = os.getenv(f"{key.upper()}_API_KEY", "").strip()
+        environment_key = os.getenv(f"{key.upper()}_API_KEY", "").strip() if key != "elevenlabs" else ""
         providers.append(
             {
                 "key": key,
@@ -622,6 +632,33 @@ def cancel_active_interview(
     cancel_interview(session_id)
     sessions.pop(session_id, None)
     return {"ok": True}
+
+
+@app.get("/speech/{session_id}/question")
+# Read the current question aloud, reusing its audio when the user presses replay.
+def question_speech(session_id: str, user: dict = Depends(current_user)) -> Response:
+    session = owned_session(session_id, user["id"])
+    question = session["current_question"]
+    cached = session.get("question_speech")
+    if not cached or cached["question"] != question:
+        try:
+            audio, media_type, provider = synthesize_question(
+                question,
+                optional_voice_key(user["id"], "groq"),
+                optional_voice_key(user["id"], "elevenlabs"),
+            )
+        except Exception as error:
+            raise HTTPException(
+                status_code=503,
+                detail="Voice is unavailable right now. You can still read and answer the question.",
+            ) from error
+        cached = {"question": question, "audio": audio, "media_type": media_type, "provider": provider}
+        session["question_speech"] = cached
+    return Response(
+        content=cached["audio"],
+        media_type=cached["media_type"],
+        headers={"Cache-Control": "private, no-store", "X-Voice-Provider": cached["provider"]},
+    )
 
 
 @app.post("/upload/{session_id}")

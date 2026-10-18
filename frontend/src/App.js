@@ -37,6 +37,9 @@ function App() {
   const startRecordingRef = useRef(null);
   const finishAfterAnswerRef = useRef(false);
   const discardRecordingRef = useRef(false);
+  const questionAudioRef = useRef(null);
+  const questionAudioUrlRef = useRef(null);
+  const voiceRequestIdRef = useRef(0);
 
   const [jobDescription, setJobDescription] = useState("");
   const [mode, setMode] = useState("general");
@@ -75,6 +78,8 @@ function App() {
   const [interviewEndsAt, setInterviewEndsAt] = useState(null);
   const [interviewTimeLeft, setInterviewTimeLeft] = useState(30 * 60);
   const [interviewTimeExpired, setInterviewTimeExpired] = useState(false);
+  const [voiceState, setVoiceState] = useState("idle");
+  const [voiceError, setVoiceError] = useState("");
 
   /** Format a countdown as minutes and two-digit seconds. */
   const formatTime = (seconds) => {
@@ -88,9 +93,47 @@ function App() {
   const activeTranscription = providerConfig.providers.find((item) => item.key === providerConfig.transcription_provider);
   const isConnected = (provider) => Boolean(provider?.configured || provider?.server_fallback_available);
   const providersReady = providerConfigLoaded && isConnected(activeLlm) && isConnected(activeTranscription);
-  const connectedProviders = providerConfig.providers.filter(isConnected);
+  const connectedProviders = providerConfig.providers.filter((item) => (item.chat || item.transcription) && isConnected(item));
+  const voiceReady = providerConfig.providers.some((item) => ["groq", "elevenlabs"].includes(item.key) && isConnected(item));
+  const elevenLabs = providerConfig.providers.find((item) => item.key === "elevenlabs");
   const needsTranscription = isConnected(activeLlm) && !isConnected(activeTranscription);
   const hasInterviewSource = mode === "special" || resumeStatus.has_resume || Boolean(jobDescription.trim());
+
+  /** Stop question playback and discard its temporary browser URL. */
+  const stopQuestionAudio = () => {
+    voiceRequestIdRef.current += 1;
+    questionAudioRef.current?.pause();
+    questionAudioRef.current = null;
+    if (questionAudioUrlRef.current) URL.revokeObjectURL(questionAudioUrlRef.current);
+    questionAudioUrlRef.current = null;
+    setVoiceState("idle");
+  };
+
+  /** Ask the backend for this session's question audio without exposing API keys. */
+  const playQuestion = async () => {
+    if (!sessionId || voiceState !== "idle") return;
+    const requestId = ++voiceRequestIdRef.current;
+    setVoiceState("loading");
+    setVoiceError("");
+    try {
+      const response = await apiRequest(`/speech/${sessionId}/question`, token);
+      const objectUrl = URL.createObjectURL(await response.blob());
+      if (requestId !== voiceRequestIdRef.current) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+      if (questionAudioUrlRef.current) URL.revokeObjectURL(questionAudioUrlRef.current);
+      questionAudioUrlRef.current = objectUrl;
+      const audio = new Audio(objectUrl);
+      questionAudioRef.current = audio;
+      audio.onended = () => { setVoiceState("idle"); setCountdown(5); };
+      await audio.play();
+      setVoiceState("playing");
+    } catch (error) {
+      setVoiceState("idle");
+      setVoiceError(error.message || "Could not play this question.");
+    }
+  };
 
   /** Remember where settings was opened from so its exit arrow can return there. */
   const navigateToPage = (destination) => {
@@ -140,6 +183,7 @@ function App() {
 
   /** Clear account-specific UI state when the user signs out. */
   const signOut = () => {
+    stopQuestionAudio();
     localStorage.removeItem("interviewer_token");
     setToken("");
     setUser(null);
@@ -153,6 +197,11 @@ function App() {
     setHistoryInterviews(null);
     setPage("dashboard");
   };
+
+  useEffect(() => {
+    stopQuestionAudio();
+    setVoiceError("");
+  }, [question, sessionId]);
 
   /** Submit the current sign-in or registration form. */
   const submitAuth = async (event) => {
@@ -309,6 +358,30 @@ function App() {
       setProviderMessages((current) => ({ ...current, [provider]: "Saved API key removed." }));
     } catch (error) {
       setProviderMessages((current) => ({ ...current, [provider]: error.message }));
+    } finally {
+      setProviderBusy("");
+    }
+  };
+
+  /** Verify and save an optional ElevenLabs key for TTS fallback only. */
+  const connectElevenLabsKey = async () => {
+    const apiKey = (providerInputs.elevenlabs || "").trim();
+    if (!apiKey) return;
+    setProviderBusy("elevenlabs");
+    setProviderMessages((current) => ({ ...current, elevenlabs: "" }));
+    try {
+      await apiRequest("/settings/providers/elevenlabs/test", token, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ api_key: apiKey }),
+      });
+      await apiRequest("/settings/providers/elevenlabs/key", token, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ api_key: apiKey }),
+      });
+      const response = await apiRequest("/settings/providers", token);
+      setProviderConfig(await response.json());
+      setProviderInputs((current) => ({ ...current, elevenlabs: "" }));
+      setProviderMessages((current) => ({ ...current, elevenlabs: "ElevenLabs voice backup verified and saved." }));
+    } catch (error) {
+      setProviderMessages((current) => ({ ...current, elevenlabs: error.message }));
     } finally {
       setProviderBusy("");
     }
@@ -533,6 +606,7 @@ function App() {
   /** Leave an interview without saving the unanswered question. */
   const exitInterview = async () => {
     if (!window.confirm("Exit this interview? The current unanswered question will not be saved.")) return;
+    stopQuestionAudio();
     discardRecordingRef.current = true;
     finishAfterAnswerRef.current = false;
     if (recognitionRef.current) {
@@ -560,7 +634,7 @@ function App() {
 
   // ================= TIMERS =================
   useEffect(() => {
-    if (page !== "question") return;
+    if (page !== "question" || voiceState !== "idle") return;
     setCountdown(5);
     const timer = setInterval(() => {
       setCountdown((prev) => {
@@ -569,7 +643,7 @@ function App() {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [page]);
+  }, [page, voiceState]);
 
   useEffect(() => {
     if (!recording || isProcessing) return;
@@ -714,12 +788,25 @@ function App() {
           </section>}
           {keySetupPath === "need" && <section className="api-guide settings-card"><p className="dashboard-eyebrow">GET STARTED</p><h2>Get a Groq API key</h2><ol><li>Create or sign in to a Groq account.</li><li>Open API Keys and create a new key.</li><li>Copy it and paste it below. We will test it before saving.</li></ol><a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Open Groq API Keys ↗</a><p>Already have a key from another service? You can choose it below instead.</p></section>}
           {showKeyEntry && <section className="api-entry settings-card"><div className="api-entry-title"><div><p className="dashboard-eyebrow">{needsTranscription ? "FINISH SETUP" : "CONNECT A SERVICE"}</p><h2>{needsTranscription ? "Connect speech-to-text" : "Paste your API key"}</h2><p>Choose the service that issued your key. We check it before storing it.</p></div></div>
-            <label>Key provider<select value={selectedProvider} onChange={(event) => setSelectedProvider(event.target.value)}>{providerConfig.providers.filter((item) => !needsTranscription || item.transcription).map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label>
+            <label>Key provider<select value={selectedProvider} onChange={(event) => setSelectedProvider(event.target.value)}>{providerConfig.providers.filter((item) => (item.chat || item.transcription) && (!needsTranscription || item.transcription)).map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label>
             <label>API key<input type="password" autoComplete="off" value={providerInputs[selectedProvider] || ""} onChange={(event) => setProviderInputs((current) => ({ ...current, [selectedProvider]: event.target.value }))} placeholder="Paste your API key" /></label>
             {selectedMetadata && !selectedMetadata.transcription && !isConnected(activeTranscription) && <p className="api-entry-note">{selectedMetadata.name} handles the interview. Spoken-answer transcription also needs a Groq or OpenAI key.</p>}
             <div className="api-entry-actions"><button type="button" className="btn-primary" onClick={connectProviderKey} disabled={Boolean(providerBusy) || !providerInputs[selectedProvider]?.trim()}>{providerBusy ? "Checking connection…" : "Test & save key"}</button>{selectedMetadata?.configured && <button type="button" className="btn-secondary" onClick={() => testProviderKey(selectedProvider)} disabled={Boolean(providerBusy)}>Test saved key</button>}</div>
             {providerMessages[selectedProvider] && <p className={`key-message${providerMessages[selectedProvider].includes("saved") || providerMessages[selectedProvider].includes("successful") ? " success" : ""}`} role="status">{providerMessages[selectedProvider]}</p>}
           </section>}
+          <section className="settings-card voice-settings" aria-label="Question voice settings">
+            <p className="dashboard-eyebrow">OPTIONAL QUESTION VOICE</p>
+            <h2>Read interview questions aloud</h2>
+            <p>English questions use Groq Orpheus first. If Groq voice is rate-limited or temporarily unavailable, ElevenLabs Flash takes over when you connect a key. Voice never changes your interview or transcription provider.</p>
+            <p>{elevenLabs?.configured ? `ElevenLabs backup ready · ${elevenLabs.masked}` : "ElevenLabs backup is not connected yet. Testing a key generates a short sample and uses a few credits."}</p>
+            {!elevenLabs?.configured && <label>ElevenLabs API key<input type="password" autoComplete="off" value={providerInputs.elevenlabs || ""} onChange={(event) => setProviderInputs((current) => ({ ...current, elevenlabs: event.target.value }))} placeholder="Paste your ElevenLabs API key" /></label>}
+            <div className="api-entry-actions">
+              {!elevenLabs?.configured && <button type="button" className="btn-primary" onClick={connectElevenLabsKey} disabled={Boolean(providerBusy) || !providerInputs.elevenlabs?.trim()}>{providerBusy === "elevenlabs" ? "Checking backup…" : "Test & save backup"}</button>}
+              {elevenLabs?.configured && <button type="button" className="btn-secondary" onClick={() => removeProviderKey("elevenlabs")} disabled={Boolean(providerBusy)}>Remove backup key</button>}
+              <a href="https://elevenlabs.io/docs/overview/administration/workspaces/api-keys" target="_blank" rel="noopener noreferrer">How to create an ElevenLabs key ↗</a>
+            </div>
+            {providerMessages.elevenlabs && <p className="key-message" role="status">{providerMessages.elevenlabs}</p>}
+          </section>
           {connectedProviders.length > 0 && <details className="api-advanced"><summary>More connection options</summary><div className="settings-card"><p>Use a previously saved key for either part of the interview, or remove a key you no longer use.</p><div className="provider-selects"><label>Interview intelligence<select value={providerConfig.llm_provider} onChange={(event) => setActiveProviders("llm_provider", event.target.value)}>{providerConfig.providers.filter((item) => item.chat && isConnected(item)).map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label><label>Audio transcription<select value={providerConfig.transcription_provider} onChange={(event) => setActiveProviders("transcription_provider", event.target.value)}>{providerConfig.providers.filter((item) => item.transcription && isConnected(item)).map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label></div><div className="api-saved-list">{connectedProviders.filter((item) => item.configured).map((item) => <div key={item.key}><span>{item.name} · {item.masked}</span><button type="button" className="btn-danger-text" onClick={() => removeProviderKey(item.key)} disabled={Boolean(providerBusy)}>Remove</button></div>)}</div></div></details>}
           <p className="api-security-note">Keys are encrypted before storage and never shown in full again. Groq and OpenAI currently support audio transcription.</p>
         </div></main>
@@ -873,6 +960,8 @@ function App() {
         <div className="question-preview-card">
           <p className="q-eyebrow">Read the question carefully</p>
           <h2 className="q-text">{question}</h2>
+          {voiceReady && <button type="button" className="question-voice-button" onClick={playQuestion} disabled={voiceState !== "idle"}>{voiceState === "loading" ? "Preparing voice…" : voiceState === "playing" ? "Reading question…" : "Listen to question"}</button>}
+          {voiceError && <p className="time-expired-note" role="status">{voiceError}</p>}
           <div className="countdown-ring-wrap">
             <svg className="countdown-ring" viewBox="0 0 80 80">
               <circle cx="40" cy="40" r="36" className="ring-bg" />
@@ -885,7 +974,7 @@ function App() {
             </svg>
             <div className="countdown-num">{countdown}</div>
           </div>
-          <p className="countdown-hint">Recording starts automatically in {countdown} second{countdown !== 1 ? "s" : ""}</p>
+          <p className="countdown-hint">{voiceState === "idle" ? `Recording starts automatically in ${countdown} second${countdown !== 1 ? "s" : ""}` : "Recording will start after the question is read."}</p>
           {interviewTimeExpired && <p className="time-expired-note">Time is up. Complete this final answer to receive your feedback.</p>}
         </div>
       </div>

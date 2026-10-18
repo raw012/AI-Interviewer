@@ -7,6 +7,7 @@ const jsonResponse = (data) => ({ ok: true, json: async () => data });
 
 /** Supply stable account and provider data without real network calls. */
 function mockAppRequests(connected) {
+  let backupConnected = false;
   const provider = {
     key: "groq",
     name: "Groq",
@@ -16,14 +17,20 @@ function mockAppRequests(connected) {
     configured: connected,
     server_fallback_available: false,
   };
+  const backup = {
+    key: "elevenlabs", name: "ElevenLabs", chat: false, transcription: false,
+    tts: true, model: "eleven_flash_v2_5", server_fallback_available: false,
+  };
   global.fetch = jest.fn(async (url) => {
     if (url.endsWith("/auth/me")) return jsonResponse({ id: "preview-user", name: "Preview User" });
     if (url.endsWith("/topics")) return jsonResponse({ topics: [] });
     if (url.endsWith("/resume/status")) return jsonResponse({ has_resume: true, filename: "resume.pdf" });
     if (url.endsWith("/dashboard")) return jsonResponse({ interviews: [], summary: { interviews: 0 } });
-    if (url.endsWith("/settings/providers")) return jsonResponse({ providers: [provider], llm_provider: "groq", transcription_provider: "groq" });
+    if (url.endsWith("/settings/providers")) return jsonResponse({ providers: [provider, { ...backup, configured: backupConnected }], llm_provider: "groq", transcription_provider: "groq" });
     if (url.endsWith("/settings/providers/groq/test")) return jsonResponse({ ok: true, message: "Connection successful" });
     if (url.endsWith("/settings/providers/groq/key")) return jsonResponse({ configured: true });
+    if (url.endsWith("/settings/providers/elevenlabs/test")) return jsonResponse({ ok: true, message: "Connection successful" });
+    if (url.endsWith("/settings/providers/elevenlabs/key")) { backupConnected = true; return jsonResponse({ configured: true }); }
     if (url.endsWith("/settings/providers/active")) return jsonResponse({ llm_provider: "groq", transcription_provider: "groq" });
     throw new Error(`Unexpected request: ${url}`);
   });
@@ -100,4 +107,16 @@ test("existing connection shows current provider instead of first-time choices",
   expect(screen.queryByRole("button", { name: /I have an API key/i })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Change connection" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Need a guide?" })).toBeInTheDocument();
+});
+
+test("ElevenLabs backup can be saved without changing the interview provider", async () => {
+  mockAppRequests(true);
+  render(<App />);
+  fireEvent.click((await screen.findAllByRole("button", { name: "API settings" }))[0]);
+  expect(await screen.findByRole("heading", { name: "Read interview questions aloud" })).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("ElevenLabs API key"), { target: { value: "test-elevenlabs-key" } });
+  fireEvent.click(screen.getByRole("button", { name: "Test & save backup" }));
+  expect(await screen.findByText(/ElevenLabs backup ready/i)).toBeInTheDocument();
+  expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining("/settings/providers/elevenlabs/test"), expect.anything());
+  expect(global.fetch).not.toHaveBeenCalledWith(expect.stringContaining("/settings/providers/active"), expect.anything());
 });

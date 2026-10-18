@@ -319,6 +319,12 @@ button, input, textarea, select { font: inherit; }
 .api-entry-note { margin-top: 14px; color: #647994; font-size: 12px; line-height: 1.5; }
 .api-entry-actions .btn-primary { width: auto; min-width: 180px; padding: 11px 18px; }
 .api-entry-actions button:disabled { opacity: .55; cursor: not-allowed; }
+.voice-settings { margin-top: 20px; }
+.voice-settings h2 { margin: 8px 0 10px; color: #1b3552; font-size: 20px; }
+.voice-settings p:not(.dashboard-eyebrow):not(.key-message) { color: #647994; font-size: 13px; line-height: 1.55; }
+.voice-settings label { display: grid; gap: 7px; margin-top: 16px; color: #304561; font-size: 13px; font-weight: 700; }
+.voice-settings input { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #d9e4f0; border-radius: 9px; font: inherit; }
+.voice-settings a { color: #2064bf; font-size: 13px; font-weight: 700; }
 .api-guide ol { display: grid; gap: 8px; margin: 20px 0; padding-left: 23px; color: #50647e; font-size: 13px; line-height: 1.5; }
 .api-guide a { display: inline-block; color: #2064bf; font-size: 13px; font-weight: 700; }
 .api-guide > p:last-child { margin-top: 15px; color: #77879c; font-size: 12px; }
@@ -720,6 +726,9 @@ button, input, textarea, select { font: inherit; }
   color: #1d1d1d;
   line-height: 1.55;
 }
+.question-voice-button { border: 1px solid #b8d1ee; border-radius: 999px; background: #edf5ff; color: #1f63ad; padding: 11px 18px; font: inherit; font-weight: 700; cursor: pointer; }
+.question-voice-button:hover { background: #e2efff; }
+.question-voice-button:disabled { opacity: .65; cursor: default; }
 
 /* Countdown ring */
 .countdown-ring-wrap {

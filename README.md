@@ -24,6 +24,7 @@ The application is built with React, FastAPI, and SQLite. Interview generation c
 - The prompt receives a compact session summary, the five most recent full Q&A pairs, relevant long-term memory, and recently asked questions to reduce repetition.
 - Users can safely exit from interview setup, question preview, or an active interview.
 - Camera and microphone permission is requested only when starting. The live transcript is hidden by default and can be revealed beneath the camera rather than over the video.
+- English questions can be read aloud from the question preview. Recording pauses its short countdown while audio plays; replaying the same question reuses cached audio instead of consuming another TTS request.
 
 ### Specialized training
 
@@ -61,6 +62,8 @@ Users can also create account-specific custom training topics.
 - Keys are encrypted before local database storage.
 - The complete key is never returned to the browser after saving.
 - A personal key takes precedence over a server fallback key where one is configured.
+- Optional question voice uses Groq's `canopylabs/orpheus-v1-english` TTS model. Long questions are split into its 200-character request limit. On a Groq 429, timeout, network error, or 5xx response, the backend falls back to ElevenLabs `eleven_flash_v2_5` when that account has an ElevenLabs key. Invalid Groq keys do not silently trigger paid backup usage. If neither voice service works, the question remains readable and the interview continues.
+- ElevenLabs is configured separately in API settings and never becomes the interview LLM or transcription provider. Its key is tested with a very short speech sample (using a few credits) and stored encrypted like other provider keys. The ElevenLabs free plan has limited monthly credits and does not include commercial-use rights; check the current plan terms before using it on a commercial site.
 
 ## Architecture
 
@@ -75,6 +78,7 @@ FastAPI backend (localhost:8000)
         +-- FFmpeg: video-to-audio extraction
         +-- Groq/OpenAI: transcription
         +-- Selected text provider: questions, scoring, and summaries
+        +-- Groq Orpheus -> ElevenLabs Flash: optional English question speech
 ```
 
 Runtime user data is written under `backend/data/`; uploaded recordings are written under `backend/uploads/`. Both directories are ignored by Git.
@@ -106,7 +110,7 @@ Create `backend/.env`:
 GROQ_API_KEY=
 ```
 
-The environment key is optional when users provide their own key through **API settings**.
+The Groq environment key is optional when users provide their own key through **API settings**. Keep it server-side and out of Git. ElevenLabs fallback requires each user to add their own key in Voice settings, so another user's requests cannot spend a shared ElevenLabs balance.
 
 ### Start the backend
 

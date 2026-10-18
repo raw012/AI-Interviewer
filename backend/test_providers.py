@@ -58,6 +58,7 @@ class ProviderVerificationTests(TestCase):
         )
         cases = {
             401: "rejected this API key",
+            402: "no available credits",
             403: "denied access",
             404: "configured model or request",
             429: "rate-limiting",

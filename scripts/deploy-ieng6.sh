@@ -3,7 +3,9 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-deploy_host="raw012@ieng6.ucsd.edu"
+# ieng6.ucsd.edu is an alias for several machines that share one home directory.
+# The app must run on exactly one of them, so deploy to that machine by name.
+deploy_host="${DEPLOY_HOST:-raw012@ieng6-203.ucsd.edu}"
 commit="$(git -C "$repo_root" rev-parse HEAD)"
 release_id="$(date -u +%Y%m%d%H%M%S)-${commit:0:12}"
 staging_dir="$(mktemp -d /private/tmp/ai-interviewer-release.XXXXXX)"

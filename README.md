@@ -64,7 +64,7 @@ STUDIO_NO_REFRESH=1 PYTHONPATH=backend python -m unittest discover -s backend -p
 cd frontend && npm run lint && CI=true npm test -- --watchAll=false && npm run build
 ```
 
-`bash scripts/deploy-ieng6.sh` builds the pushed commit, uploads it, backs up code and database, restarts the API and rolls back on failure. Use `DEPLOY_BRANCH=<branch>` to preview a branch. Refresh trending questions weekly with `python backend/question_refresh.py` (the API also refreshes on startup when data is over a week old).
+`bash scripts/deploy-ieng6.sh` builds the pushed commit, uploads it, backs up code and database, restarts the API and rolls back on failure. Use `DEPLOY_BRANCH=<branch>` to preview a branch. `ieng6.ucsd.edu` is an alias for several machines; the app runs on `ieng6-203` (override with `DEPLOY_HOST`). Refresh trending questions weekly with `python backend/question_refresh.py` (the API also refreshes on startup when data is over a week old).
 
 ## Licence
 

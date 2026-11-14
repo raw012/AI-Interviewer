@@ -8,6 +8,7 @@ from unittest import mock
 
 os.environ["AI_INTERVIEWER_DB"] = os.path.join(tempfile.mkdtemp(), "studio-test.db")
 os.environ["GROQ_API_KEY"] = "test-key"
+os.environ["STUDIO_NO_REFRESH"] = "1"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -55,7 +56,7 @@ class StudioFlowTest(unittest.TestCase):
             self.assertIn("employment", fields)
 
             answered = self.client.post("/studio/intake/answer", json={"target": parsed["target"], "answers": {"employment": "internship"}}, headers=self.headers).json()
-            self.assertEqual(answered["target"]["level"], "")
+            self.assertEqual(answered["target"]["level"], "intern")
             self.assertEqual(answered["missing"], [])
             target = answered["target"]
 

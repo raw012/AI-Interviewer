@@ -135,6 +135,21 @@ def init_studio(db: sqlite3.Connection) -> None:
         },
     )
     _add_columns(db, "resumes", {"digest_json": "TEXT NOT NULL DEFAULT ''"})
+    _add_columns(db, "question_bank", {"extras": "TEXT NOT NULL DEFAULT '{}'"})
+    db.execute(
+        """CREATE TABLE IF NOT EXISTS trending_problems (
+            company TEXT NOT NULL,
+            ref TEXT NOT NULL,
+            title TEXT NOT NULL,
+            difficulty TEXT NOT NULL DEFAULT '',
+            frequency REAL NOT NULL DEFAULT 0,
+            topics TEXT NOT NULL DEFAULT '',
+            window TEXT NOT NULL DEFAULT '30d',
+            source TEXT NOT NULL DEFAULT '',
+            fetched_at TEXT NOT NULL,
+            PRIMARY KEY(company, ref)
+        )"""
+    )
     db.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users(google_sub) WHERE google_sub IS NOT NULL"
     )
@@ -246,17 +261,18 @@ def upsert_questions(questions: Iterable[dict], origin: str = "seed") -> int:
                 "source_note": q.get("source_note", ""),
                 "priority": float(q.get("priority", 0.5)),
                 "status": q.get("status", "active"),
+                "extras": json.dumps(q.get("extras", {})),
                 **{field: json.dumps(q.get(field, [])) for field in _JSON_FIELDS},
             }
             db.execute(
                 f"""INSERT INTO question_bank(id,text,kind,{",".join(_JSON_FIELDS)},difficulty,
-                    provenance,source_note,priority,status,origin,last_reported,created_at,updated_at)
+                    provenance,source_note,priority,status,origin,last_reported,created_at,updated_at,extras)
                     VALUES(:id,:text,:kind,{",".join(":" + f for f in _JSON_FIELDS)},:difficulty,
-                    :provenance,:source_note,:priority,:status,:origin,:now,:now,:now)
+                    :provenance,:source_note,:priority,:status,:origin,:now,:now,:now,:extras)
                     ON CONFLICT(id) DO UPDATE SET text=excluded.text,kind=excluded.kind,
                     {",".join(f"{f}=excluded.{f}" for f in _JSON_FIELDS)},
                     difficulty=excluded.difficulty,provenance=excluded.provenance,
-                    source_note=excluded.source_note,
+                    source_note=excluded.source_note,extras=excluded.extras,
                     priority=MAX(question_bank.priority, excluded.priority),
                     updated_at=excluded.updated_at""",
                 {**values, "origin": origin, "now": now},
@@ -269,6 +285,7 @@ def _question_row(row: sqlite3.Row) -> dict:
     item = dict(row)
     for field in _JSON_FIELDS:
         item[field] = _loads(item[field], [])
+    item["extras"] = _loads(item.get("extras"), {})
     return item
 
 
@@ -620,3 +637,67 @@ def export_user_data(user_id: str) -> dict:
         ],
         "memory": memory,
     }
+
+
+# ---------------------------------------------------------------- trending problems
+
+
+def save_trending(company: str, rows: list[dict], source: str) -> int:
+    """Replace a company's recently-reported list with a fresh snapshot."""
+    now = now_iso()
+    with connection() as db:
+        db.execute("DELETE FROM trending_problems WHERE company=?", (company,))
+        for row in rows:
+            db.execute(
+                """INSERT OR REPLACE INTO trending_problems(company,ref,title,difficulty,frequency,topics,window,source,fetched_at)
+                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                (company, row["ref"], row["title"], row.get("difficulty", ""), float(row.get("frequency", 0)),
+                 row.get("topics", ""), row.get("window", "30d"), source, now),
+            )
+    return len(rows)
+
+
+def trending_for(company: str = "") -> dict[str, float]:
+    """ref -> recency score (0-1). Without a company, the average across companies."""
+    with connection() as db:
+        if company:
+            rows = db.execute("SELECT ref, frequency FROM trending_problems WHERE company=?", (company,)).fetchall()
+            return {r["ref"]: r["frequency"] / 100 for r in rows}
+        rows = db.execute(
+            "SELECT ref, SUM(frequency) AS f, COUNT(DISTINCT company) AS c FROM trending_problems GROUP BY ref"
+        ).fetchall()
+        total = db.execute("SELECT COUNT(DISTINCT company) AS c FROM trending_problems").fetchone()["c"] or 1
+    return {r["ref"]: min(1.0, r["f"] / 100 / max(1, total) * 2) for r in rows}
+
+
+def trending_summary(company: str, limit: int = 8) -> dict:
+    with connection() as db:
+        rows = db.execute(
+            "SELECT title, difficulty, frequency, topics, fetched_at FROM trending_problems WHERE company=? ORDER BY frequency DESC LIMIT 60",
+            (company,),
+        ).fetchall()
+    if not rows:
+        return {}
+    topics: dict[str, float] = {}
+    for r in rows:
+        for t in [x.strip() for x in r["topics"].split(",") if x.strip()]:
+            topics[t] = topics.get(t, 0) + r["frequency"]
+    mix = {}
+    for r in rows:
+        mix[r["difficulty"].title()] = mix.get(r["difficulty"].title(), 0) + 1
+    return {
+        "topics": [t for t, _ in sorted(topics.items(), key=lambda kv: -kv[1])[:limit]],
+        "difficulty_mix": mix,
+        "count": len(rows),
+        "fetched_at": rows[0]["fetched_at"],
+    }
+
+
+def trending_age_days() -> float | None:
+    with connection() as db:
+        row = db.execute("SELECT MAX(fetched_at) AS t FROM trending_problems").fetchone()
+    if not row or not row["t"]:
+        return None
+    from datetime import datetime, timezone
+
+    return (datetime.now(timezone.utc) - datetime.fromisoformat(row["t"])).total_seconds() / 86400

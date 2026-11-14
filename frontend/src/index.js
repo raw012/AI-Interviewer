@@ -4,7 +4,6 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import DesignPreview from './DesignPreview';
-import './product-polish.css';
 import reportWebVitals from './reportWebVitals';
 const preview = process.env.NODE_ENV === 'development' && new URLSearchParams(window.location.search).has('design');
 

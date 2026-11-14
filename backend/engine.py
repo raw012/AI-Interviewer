@@ -31,6 +31,7 @@ from studio_store import (
     save_studio_report,
     save_studio_state,
     studio_exchanges,
+    trending_for,
     user_question_history,
 )
 
@@ -77,8 +78,13 @@ def _resume_items(user_id: str, count: int) -> list[dict]:
     return items
 
 
-def _score_question(q: dict, role: str, level: str, ckey: str, focus: list[str], history: dict) -> float:
+def _score_question(q: dict, role: str, level: str, ckey: str, focus: list[str], history: dict, trend: dict | None = None) -> float:
     score = float(q.get("priority", 0.5))
+    extras = q.get("extras") or {}
+    if extras.get("harness"):
+        score += 0.3  # runnable problems give a better coding round
+    if trend and extras.get("ref") in trend:
+        score += 0.25 + 0.5 * trend[extras["ref"]]  # reported recently for this company
     if q["role_families"] and role not in q["role_families"]:
         return -1
     if q["levels"] and level not in q["levels"]:
@@ -109,6 +115,8 @@ def build_plan(user_id: str, target: dict, brief: dict, minutes: int) -> list[di
     focus = focus_competencies(user_id)
     history = user_question_history(user_id)
     bank = list_questions(set(rounds) | {"recruiter_screen", "behavioral"})
+    company_trend = trending_for(ckey) if ckey else {}
+    trend = company_trend or trending_for("")
     # Fit the loop into the session length, keeping round order and variety.
     plan: list[dict] = []
     used: set[str] = set()
@@ -116,9 +124,17 @@ def build_plan(user_id: str, target: dict, brief: dict, minutes: int) -> list[di
 
     def pick(kind: str) -> dict | None:
         pool = [q for q in bank if q["kind"] == kind and q["id"] not in used]
-        ranked = sorted(pool, key=lambda q: _score_question(q, role, level, ckey, focus, history), reverse=True)
-        ranked = [q for q in ranked if _score_question(q, role, level, ckey, focus, history) > 0]
-        return ranked[0] if ranked else None
+        scored = [(_score_question(q, role, level, ckey, focus, history, trend), q) for q in pool]
+        scored = sorted([x for x in scored if x[0] > 0], key=lambda x: x[0], reverse=True)
+        if not scored:
+            return None
+        best = dict(scored[0][1])
+        ref = (best.get("extras") or {}).get("ref")
+        if ref and ref in company_trend:
+            best["trending"] = f"Reported by candidates at {target.get('company') or ckey.title()} in the last 30 days"
+        elif ref and ref in trend:
+            best["trending"] = "Reported by candidates at major tech companies in the last 30 days"
+        return best
 
     # Opener for non-technical-only sessions
     if not set(rounds) <= {"coding", "system_design", "sql", "statistics"}:
@@ -169,6 +185,8 @@ def _plan_item(q: dict) -> dict:
         "source_note": q.get("source_note", ""),
         "source_urls": q.get("source_urls", []),
         "difficulty": q.get("difficulty", 2),
+        "extras": q.get("extras") or {},
+        "trending": q.get("trending", ""),
         "status": "pending",
     }
 
@@ -231,7 +249,7 @@ Return only JSON:
 Memory: propose 0-2 items, only durable, useful observations about interview skills, STAR stories used, or stated career facts. Never health, family, age, ethnicity, religion, politics, immigration, salary or personality judgements."""
 
 
-def _turn_prompt(state: dict, item: dict, next_item: dict | None, answer: str, code: str, remaining: int, depth: int, max_depth: int, memory_lines: str) -> str:
+def _turn_prompt(state: dict, item: dict, next_item: dict | None, answer: str, code: str, remaining: int, depth: int, max_depth: int, memory_lines: str, run: dict | None = None) -> str:
     tail = "\n".join(f"Q: {clip(t['q'], 220)}\nA: {clip(t['a'], 380)}" for t in state.get("tail", [])[-2:])
     parts = [
         f"Time left: ~{max(0, remaining // 60)} min. Follow-ups used on this question: {depth}/{max_depth}.",
@@ -251,7 +269,16 @@ def _turn_prompt(state: dict, item: dict, next_item: dict | None, answer: str, c
     parts.append(f"You just asked: {clip(state.get('last_prompt', ''), 400)}")
     parts.append(f"Candidate replied: {clip(answer, 3500) or '(silence / no answer)'}")
     if code.strip():
-        parts.append(f"Candidate's code:\n{clip(code, 3000)}")
+        parts.append(f"Candidate's code ({(run or {}).get('language', 'unspecified language')}):\n{clip(code, 3000)}")
+    if run and run.get("total"):
+        failing = "; ".join(str(x)[:120] for x in (run.get("failing") or [])[:3])
+        parts.append(
+            f"They ran the test suite in the workspace: {run.get('passed', 0)}/{run['total']} tests passed."
+            + (f" Failing: {failing}" if failing else "")
+            + " Score correctness on these real results, not on how the code looks."
+        )
+    elif (item.get("extras") or {}).get("harness") and code.strip():
+        parts.append("They have not run the tests yet. A real interviewer would ask them to test before moving on.")
     if next_item:
         parts.append(f"NEXT planned question (use if action is next): {next_item['text']}")
     else:
@@ -308,7 +335,7 @@ def remaining_seconds(state: dict) -> int:
         return 0
 
 
-def take_turn(user_id: str, interview: dict, answer: str, code: str = "", prefs: dict | None = None) -> dict:
+def take_turn(user_id: str, interview: dict, answer: str, code: str = "", prefs: dict | None = None, run: dict | None = None) -> dict:
     prefs = prefs or {}
     state, plan, target = interview["state"], interview["plan"], interview["target"]
     session_id = interview["session_id"]
@@ -333,7 +360,7 @@ def take_turn(user_id: str, interview: dict, answer: str, code: str = "", prefs:
             memory_lines += "\nStories already used before: " + "; ".join(stories[:5])
 
     system = system_prompt(target, interview.get("persona") or prefs.get("persona", "maya"), prefs.get("pressure", "realistic"))
-    prompt = _turn_prompt(state, item, next_item, answer, code, remaining, depth, max_depth, memory_lines)
+    prompt = _turn_prompt(state, item, next_item, answer, code, remaining, depth, max_depth, memory_lines, run)
     try:
         result = ask_json(user_id, "turn", prompt, system=system, session_id=session_id, effort="low", max_tokens=900, temperature=0.3)
     except ModelError:
@@ -352,6 +379,8 @@ def take_turn(user_id: str, interview: dict, answer: str, code: str = "", prefs:
     response: dict = {"action": action}
     if action != "clarify":
         assessment = _clean_assessment(assessment, item)
+        if run and run.get("total"):
+            assessment["tests"] = {"passed": int(run.get("passed", 0)), "total": int(run["total"]), "language": str(run.get("language", ""))[:20]}
         state["number"] += 1
         exchange = {
             "number": state["number"],
@@ -469,6 +498,22 @@ def _progress(state: dict, plan: list[dict]) -> dict:
         "depth": state.get("depth", 0),
         "remaining_seconds": remaining_seconds(state),
         "current_kind": plan[min(state["index"], len(plan) - 1)]["kind"],
+        "problem": problem_view(plan[min(state["index"], len(plan) - 1)]),
+    }
+
+
+def problem_view(item: dict) -> dict | None:
+    """What the code workspace needs for the current question."""
+    extras = item.get("extras") or {}
+    if item["kind"] not in ("coding", "sql", "frontend", "object_design") and not extras.get("harness"):
+        return None
+    return {
+        "id": item["id"],
+        "title": extras.get("title") or ROUNDS.get(item["kind"], {}).get("label", "Problem"),
+        "text": item["text"],
+        "harness": extras.get("harness"),
+        "provenance": item.get("provenance", "practice"),
+        "trending": item.get("trending", ""),
     }
 
 

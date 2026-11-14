@@ -13,12 +13,14 @@ from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Respo
 from auth_google import client_id as google_client_id
 from auth_google import verify_id_token
 from deps import current_user, optional_voice_key, provider_runtime, server_fallback_available
-from engine import build_plan, coach_hint, final_report, new_state, opening, retry_answer, take_turn
+from engine import problem_view, remaining_seconds, build_plan, coach_hint, final_report, new_state, opening, retry_answer, take_turn
 from intake import apply_answers, digest_resume, parse_goal, role_brief
 from knowledge import COMPANIES, COMPETENCY_LABELS, LEVELS, PERSONAS, PRESSURE_STYLES, ROLE_FAMILIES, ROUNDS
 from llm import ModelError
 from memory import add_memory, clear_memory, delete_memory, edit_memory, expire_candidates, focus_competencies, list_memory
 from providers import transcribe_file
+from coding_problems import PROBLEMS
+from question_refresh import refresh_if_stale
 from question_seed import QUESTIONS
 from storage import connection, issue_token
 from studio_store import (
@@ -36,6 +38,7 @@ from studio_store import (
     save_profile,
     save_studio_state,
     set_password,
+    trending_summary,
     update_name,
     upsert_questions,
     usage_summary,
@@ -49,6 +52,9 @@ ALLOWED_MINUTES = {15, 30, 45, 60}
 
 def init_studio_data() -> None:
     upsert_questions(QUESTIONS, origin="seed")
+    upsert_questions(PROBLEMS, origin="seed")
+    if not os.getenv("STUDIO_NO_REFRESH"):
+        refresh_if_stale()
 
 
 def _interview(session_id: str, user_id: str) -> dict:
@@ -180,6 +186,9 @@ def intake_brief(request: dict, user: dict = Depends(current_user)) -> dict:
     target = request.get("target") or {}
     provider_runtime(user["id"], "llm")
     brief = role_brief(user["id"], target, refresh=bool(request.get("refresh")))
+    trending = trending_summary(target.get("company_key", ""))
+    if trending:
+        brief = {**brief, "trending": trending}
     save_profile(user["id"], target=target)
     return {"brief": brief}
 
@@ -225,6 +234,7 @@ def start(request: dict, user: dict = Depends(current_user)) -> dict:
         "total": len(plan),
         "remaining_seconds": minutes * 60,
         "current_kind": plan[0]["kind"],
+        "problem": problem_view(plan[0]),
     }
 
 
@@ -249,24 +259,28 @@ def interview_detail(session_id: str, user: dict = Depends(current_user)) -> dic
         "plan": [{"kind": p["kind"], "label": ROUNDS.get(p["kind"], {}).get("label", p["kind"]), "status": p.get("status")} for p in interview["plan"]],
         "index": state.get("index", 0),
         "total": len(interview["plan"]),
+        "current_kind": interview["plan"][min(state.get("index", 0), len(interview["plan"]) - 1)]["kind"] if interview["plan"] else "",
+        "remaining_seconds": remaining_seconds(state) if state.get("phase") != "done" else 0,
+        "problem": problem_view(interview["plan"][min(state.get("index", 0), len(interview["plan"]) - 1)]) if interview["plan"] else None,
         "report": interview["report"],
     }
 
 
-def _run_turn(user: dict, session_id: str, text: str, code: str) -> dict:
+def _run_turn(user: dict, session_id: str, text: str, code: str, run: dict | None = None) -> dict:
     interview = _interview(session_id, user["id"])
     if interview["state"].get("phase") == "done" or interview["status"] == "completed":
         raise HTTPException(status_code=409, detail="This interview has ended")
     prefs = {**get_profile(user["id"])["prefs"], **interview["state"].get("prefs", {})}
     try:
-        return take_turn(user["id"], interview, text, code, prefs)
+        return take_turn(user["id"], interview, text, code, prefs, run)
     except ModelError as exc:
         raise _model_error(exc) from exc
 
 
 @router.post("/studio/interviews/{session_id}/turn")
 def turn(session_id: str, request: dict, user: dict = Depends(current_user)) -> dict:
-    return _run_turn(user, session_id, str(request.get("text", ""))[:8000], str(request.get("code", ""))[:12000])
+    run = request.get("run") if isinstance(request.get("run"), dict) else None
+    return _run_turn(user, session_id, str(request.get("text", ""))[:8000], str(request.get("code", ""))[:12000], run)
 
 
 @router.post("/studio/transcribe")

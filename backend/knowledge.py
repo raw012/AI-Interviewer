@@ -7,6 +7,8 @@ the product always shows the source type and asks the user to confirm.
 
 from __future__ import annotations
 
+import re
+
 ROLE_FAMILIES = {
     "software_engineering": {
         "label": "Software Engineering",
@@ -317,8 +319,8 @@ def match_alias(text: str, table: dict, alias_key: str = "aliases") -> str | Non
     for key, item in table.items():
         aliases = item.get(alias_key, []) if isinstance(item, dict) else item
         for alias in aliases:
-            needle = alias.lower()
-            if needle.strip() and needle in lowered:
+            needle = alias.lower().strip()
+            if needle and re.search(rf"(?<![a-z0-9]){re.escape(needle)}(?![a-z0-9])", lowered):
                 if not best or len(needle) > best[0]:
                     best = (len(needle), key)
     return best[1] if best else None

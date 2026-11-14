@@ -77,6 +77,8 @@ def _clean(raw: dict) -> dict:
     target["employment"] = employment if employment in ("internship", "full_time") else ""
     if target["level"] == "intern":
         target["employment"] = "internship"
+    elif target["employment"] == "internship" and not target["level"]:
+        target["level"] = "intern"
     elif target["level"] and not target["employment"]:
         target["employment"] = "full_time"
     target["company"] = str(raw.get("company") or "")[:60].strip()
@@ -139,6 +141,13 @@ def parse_goal(user_id: str, text: str, job_description: str = "") -> dict:
         for key, value in rules.items():  # rules fill gaps the model left empty
             if not raw.get(key) and value:
                 raw[key] = value
+        if not job_description.strip():
+            # Level and internship vs full-time change the whole interview, so the
+            # model may not guess them: keep them only when the text says so.
+            if not rules["level"] and not re.search(r"\b(\d+\+? ?(years?|yrs?|yoe)|principal|lead)\b", text, re.I):
+                raw["level"] = ""
+            if not rules["employment"] and raw.get("level") != "intern":
+                raw["employment"] = ""
     except (ModelError, Exception):
         raw = _rule_parse(text)
         source = "rules"
@@ -217,7 +226,7 @@ def role_brief(user_id: str, target: dict, refresh: bool = False) -> dict:
     role = target.get("role_family") or "software_engineering"
     level = target.get("level") or ("intern" if target.get("employment") == "internship" else "new_grad")
     ckey = target.get("company_key") or company_key(target.get("company", ""))
-    cache_key = f"{ckey or (target.get('company') or 'general').lower()}|{role}|{level}"
+    cache_key = f"{ckey or (target.get('company') or 'general').lower()}|{role}|{level}|{','.join(target.get('rounds') or [])}"
     if not refresh and not target.get("job_description"):
         cached = get_brief(cache_key)
         if cached:
@@ -268,6 +277,11 @@ def role_brief(user_id: str, target: dict, refresh: bool = False) -> dict:
         rounds = [x for x in result.get("loop", []) if isinstance(x, dict) and x.get("round") in ROUNDS]
         if rounds:
             brief["loop"] = rounds[:6]
+        if target.get("rounds"):
+            # The user asked for specific rounds: practise those, keep the real loop for context.
+            focus = {x["round"]: x.get("focus", "") for x in rounds}
+            brief["full_loop"] = [x["round"] for x in rounds]
+            brief["loop"] = [{"round": r, "focus": focus.get(r) or ROUNDS[r]["assesses"]} for r in target["rounds"]]
         for key in ("summary", "confidence"):
             if isinstance(result.get(key), str) and result[key]:
                 brief[key] = result[key][:600]

@@ -12,11 +12,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Response, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pypdf import PdfReader
 
+from deps import current_user, optional_voice_key, provider_runtime, resolved_api_key, server_fallback_available
 from evaluator import analyze_recording, score_answer, update_interview_summary
 from providers import PROVIDERS, complete_text, synthesize_question, test_provider, verification_failure_message
 from speech import extract_audio, transcribe_audio
@@ -61,13 +62,22 @@ from storage import (
 app = FastAPI(title="AI Interview Coach")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        *[o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()],
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 init_db()
+
+from studio import init_studio_data, router as studio_router  # noqa: E402
+
+init_studio_data()
+app.include_router(studio_router)
 
 sessions: dict[str, dict] = {}
 ALLOWED_DURATIONS = {30, 60}
@@ -121,40 +131,6 @@ def topic_for_user(user_id: str, key: str) -> dict | None:
     return next((item for item in topic_catalog(user_id) if item["key"] == key), None)
 
 
-# Prefer the user's saved key, then the server's fallback key.
-def resolved_api_key(user_id: str, provider: str = "groq") -> str:
-    personal_key = api_key_for_user(user_id, provider)
-    environment_key = os.getenv(f"{provider.upper()}_API_KEY", "").strip()
-    key = personal_key or environment_key
-    if not key or key == "paste_your_new_groq_api_key_here":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Configure a {PROVIDERS[provider]['name']} API key in API Settings",
-        )
-    return key
-
-
-# Voice is optional; use a personal key first and never send one to the browser.
-def optional_voice_key(user_id: str, provider: str) -> str | None:
-    key = api_key_for_user(user_id, provider)
-    if provider == "groq" and not key:
-        key = os.getenv("GROQ_API_KEY", "").strip()
-    if not key or key.startswith("your_") or key == "paste_your_new_groq_api_key_here":
-        return None
-    return key
-
-
-# Resolve the active provider and key for text or transcription.
-def provider_runtime(user_id: str, capability: str) -> tuple[str, str]:
-    settings = provider_settings(user_id)
-    provider = settings[
-        "transcription_provider" if capability == "transcription" else "llm_provider"
-    ]
-    if provider not in PROVIDERS or not PROVIDERS[provider].get(capability if capability == "transcription" else "chat"):
-        raise HTTPException(status_code=400, detail=f"Selected provider cannot perform {capability}")
-    return provider, resolved_api_key(user_id, provider)
-
-
 # Return a timezone-aware timestamp for interview deadlines.
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -163,16 +139,6 @@ def utc_now() -> datetime:
 # Clamp the interview countdown to zero.
 def seconds_remaining(session: dict) -> int:
     return max(0, int((session["deadline_at"] - utc_now()).total_seconds()))
-
-
-# Authenticate a bearer token on protected routes.
-def current_user(authorization: str | None = Header(default=None)) -> dict:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Please sign in")
-    user = user_for_token(authorization.removeprefix("Bearer ").strip())
-    if not user:
-        raise HTTPException(status_code=401, detail="Session expired. Please sign in again")
-    return user
 
 
 # Pair a new bearer token with safe account fields.

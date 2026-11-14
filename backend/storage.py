@@ -173,6 +173,10 @@ def init_db() -> None:
             db.execute(
                 "ALTER TABLE memory_items ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0"
             )
+        # Studio tables live in their own module; imported lazily to avoid a cycle.
+        from studio_store import init_studio
+
+        init_studio(db)
 
 
 # Derive a salted password hash for storage and comparison.
@@ -262,7 +266,7 @@ def save_resume(user_id: str, filename: str, pdf: bytes, extracted_text: str) ->
                VALUES(?,?,?,?,?)
                ON CONFLICT(user_id) DO UPDATE SET filename=excluded.filename,
                pdf=excluded.pdf, extracted_text=excluded.extracted_text,
-               updated_at=excluded.updated_at""",
+               updated_at=excluded.updated_at, digest_json=''""",
             (user_id, filename, pdf, extracted_text, now_iso()),
         )
 

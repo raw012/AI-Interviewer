@@ -16,9 +16,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Deployment is always made from exactly what was pushed to GitHub.
-if [[ "$commit" != "$(git -C "$repo_root" rev-parse origin/main)" ]]; then
-  echo "Push the current commit to origin/main before deploying." >&2
+# Deployment is always made from exactly what was pushed to GitHub. main is the
+# default; set DEPLOY_BRANCH=<branch> to preview a pushed feature branch.
+deploy_branch="${DEPLOY_BRANCH:-main}"
+git -C "$repo_root" fetch --quiet origin "$deploy_branch"
+if [[ "$commit" != "$(git -C "$repo_root" rev-parse "origin/$deploy_branch")" ]]; then
+  echo "Push the current commit to origin/$deploy_branch before deploying." >&2
   exit 1
 fi
 if ! git -C "$repo_root" -c core.filemode=false diff --quiet HEAD -- \
@@ -31,11 +34,11 @@ if [[ -n "$(git -C "$repo_root" ls-files --others --exclude-standard -- frontend
   exit 1
 fi
 
-# Export committed backend files; local uncommitted data and secrets stay behind.
-git -C "$repo_root" archive HEAD \
-  backend/main.py backend/storage.py backend/evaluator.py \
-  backend/providers.py backend/speech.py backend/test_providers.py \
-  | tar -xf - -C "$staging_dir"
+# Export every committed backend module; local data, uploads and secrets stay behind.
+backend_files=()
+while IFS= read -r path; do backend_files+=("$path"); done \
+  < <(git -C "$repo_root" ls-files 'backend/*.py')
+git -C "$repo_root" archive HEAD "${backend_files[@]}" | tar -xf - -C "$staging_dir"
 
 # CRA serves API and UI from the same origin in production.
 (cd "$repo_root/frontend" && CI=true BUILD_PATH="$staging_dir/frontend/build" npm run build)
@@ -50,4 +53,4 @@ ssh -o BatchMode=yes "$deploy_host" bash -s -- "$release_id" \
 # Check the public tunnel as well as the server-local health check.
 curl --fail --silent --show-error --max-time 20 \
   https://interview.buildbyray.dev/health > /dev/null
-echo "Deployed $commit to https://interview.buildbyray.dev/"
+echo "Deployed $commit ($deploy_branch) to https://interview.buildbyray.dev/"

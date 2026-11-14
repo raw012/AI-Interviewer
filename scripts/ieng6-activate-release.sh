@@ -6,7 +6,7 @@ release_id="$1"
 app_root="$HOME/ai-interviewer"
 release_dir="$app_root/releases/$release_id"
 backup_dir="$release_dir/backup"
-files=(main.py storage.py evaluator.py providers.py speech.py)
+files=()  # filled from the uploaded release: every backend module it contains
 
 # Identify the process that actually owns the API port; app.pid can be stale.
 backend_listener_pid() {
@@ -44,6 +44,8 @@ rollback() {
   for file in "${files[@]}"; do
     if [[ -f "$backup_dir/backend/$file" ]]; then
       cp -p "$backup_dir/backend/$file" "$app_root/backend/$file"
+    else
+      rm -f "$app_root/backend/$file"  # module introduced by the failed release
     fi
   done
   pid="$(backend_listener_pid)"
@@ -57,18 +59,24 @@ trap rollback ERR
 # Validate the uploaded package before changing the running app.
 mkdir -p "$release_dir/new" "$backup_dir/backend"
 tar -xzf "$app_root/releases/$release_id.tar.gz" -C "$release_dir/new"
+for path in "$release_dir"/new/backend/*.py; do
+  files+=("$(basename "$path")")
+done
+test -f "$release_dir/new/backend/main.py"
 for file in "${files[@]}"; do
-  test -f "$release_dir/new/backend/$file"
-  cp -p "$app_root/backend/$file" "$backup_dir/backend/$file"
+  if [[ -f "$app_root/backend/$file" ]]; then
+    cp -p "$app_root/backend/$file" "$backup_dir/backend/$file"
+  fi
 done
 test -f "$release_dir/new/frontend/build/index.html"
 PYTHONPYCACHEPREFIX="$release_dir/pycache" \
-  "$app_root/.venv/bin/python" -m py_compile \
-  "$release_dir/new/backend/main.py" \
-  "$release_dir/new/backend/storage.py" \
-  "$release_dir/new/backend/evaluator.py" \
-  "$release_dir/new/backend/providers.py" \
-  "$release_dir/new/backend/speech.py"
+  "$app_root/.venv/bin/python" -m py_compile "$release_dir"/new/backend/*.py
+
+# Keep a copy of the database before new code migrates it. Schema changes are
+# additive, so a rollback keeps the live database and this copy is a safety net.
+if [[ -f "$app_root/backend/data/interviewer.db" ]]; then
+  cp -p "$app_root/backend/data/interviewer.db" "$backup_dir/interviewer.db"
+fi
 
 # Swap only application code; backend/data and backend/videos stay in place.
 for file in "${files[@]}"; do

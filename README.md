@@ -1,188 +1,71 @@
-# AI Interview Coach
+# AI Interviewer
 
-An English-first interview practice platform for adaptive mock interviews and focused technical training. The home screen puts interview practice first, while saved materials, past feedback, and API settings remain easy to find.
+Mock interviews with an interviewer that listens, follows up on what you said, runs your code, and coaches you afterwards.
 
-The application is built with React, FastAPI, and SQLite. Interview generation can use several model providers; audio transcription currently uses Groq or OpenAI.
+Live: https://interview.buildbyray.dev
 
-## Features
+## What it does
 
-### Practice home
+1. **Say what you're preparing for.** One text box (or dictate): "Google SWE intern, interviews in three weeks." The app asks only for what's missing: role, internship or full-time, level, company.
+2. **Check the interview brief.** A short description of the real loop for that company, role and level, with sources. Pick the rounds, length, interviewer and style.
+3. **Do the interview.** The interviewer speaks, you answer by voice or typing. Follow-ups depend on your answer. Coding rounds open a workspace where you write, run and test code.
+4. **Get coached.** A report scores each answer against a rubric, shows what worked and what was missing, asks guiding questions before revealing a stronger approach, and lets you re-answer to see the difference. You can hear the debrief read aloud.
+5. **Come back.** The app remembers the skills worth revisiting and brings them back on a spaced schedule.
 
-- The primary action is starting an interview. Your last mode, topic, duration, and job description are reused for a one-click start when a source is available.
-- Without working interview and transcription providers, a soft setup section offers direct links for each missing service and Start stays disabled. The section disappears when both providers are ready.
-- Home focuses on starting an interview; completed interviews and feedback live in Past interviews rather than a duplicate recent-interviews panel.
-- The flat blue-and-muted-green practice plant is part of the home background rather than a separate card. A small sprout appears from the start, and more leaves grow outward with completed interviews; the newest leaf unfurls on the feedback screen. Reduced-motion settings disable the animation.
-- The signed-in app shows one Sign out control in the top-right account bar, including on the API settings page.
-- Desktop uses a compact sidebar; mobile uses a bottom tab bar for Home, Resume, Past interviews, and API settings.
-- Profile and recording-review pages are hidden from the current navigation. Existing stored data and backend routes are preserved.
+## How it works
 
-### Adaptive interviews
+| Area | Approach |
+|---|---|
+| Questions | About 190 questions tagged by role, level, company and competency, each with a rubric and follow-ups. Every question is labelled *official guidance*, *commonly reported* or *practice*; the app never claims a company asked something without a source. |
+| Recent coding questions | `question_refresh.py` pulls public candidate-reported "last 30 days" lists per company each week and re-ranks the 28 runnable coding problems for the target company. |
+| Code workspace | Python (Pyodide) and JavaScript run in the browser in a Web Worker with a time limit. Nothing executes on the server. Test results go to the interviewer. |
+| Tokens | One model call per turn scores the answer, updates a 600-character running summary, proposes memory and writes the next line. The system prompt is fixed per session so providers can cache it. Usage is logged per interview. |
+| Evaluation | Explicit rubric per question, a 1–5 scale anchored to the target level, quoted evidence, per-competency scores, temperature 0. The overall score is computed, not asked for. |
+| Memory | Stores growth areas, strengths, stories told, background and preferences. Never stores recordings or sensitive personal data. One-off slips expire; growth areas are reviewed at 1, 3, 7, 14 and 30 days. Users can view, edit and delete everything. |
+| Voice | Four interviewers with their own voices (Groq Orpheus, ElevenLabs optional, device voice as fallback). Speech-to-text with Whisper. |
+| Accounts | Email and password or Google sign-in, data export, sign out other devices, account deletion. |
 
-- General interviews based on a saved PDF resume and/or job description.
-- 30-minute and 60-minute sessions with no fixed question count.
-- The timer never interrupts an answer. When time expires, the current answer is evaluated before the interview ends.
-- The prompt receives a compact session summary, the five most recent full Q&A pairs, relevant long-term memory, and recently asked questions to reduce repetition.
-- Users can safely exit from interview setup, question preview, or an active interview.
-- Camera and microphone permission is requested only when starting. The live transcript is hidden by default and can be revealed beneath the camera rather than over the video.
-- English questions can be read aloud from the question preview. Recording pauses its short countdown while audio plays; replaying the same question reuses cached audio instead of consuming another TTS request.
+## Stack
 
-### Specialized training
+React 19 (Create React App) · FastAPI · SQLite · Groq / OpenAI / Anthropic / Gemini / Qwen for the model · Groq or OpenAI Whisper for transcription.
 
-Built-in training domains include:
-
-- Java OOP
-- Computer Networks
-- Operating Systems
-- Machine Learning
-- Data Structures & Algorithms
-- Deep Learning
-
-Users can also create account-specific custom training topics.
-
-### Memory and feedback
-
-- Interview answers produce reviewable strength and growth-area memories.
-- Memories include confidence, recurrence, evidence question, and source interview.
-- Post-interview feedback distinguishes a genuine knowledge gap from a mismatched question.
-- Mismatched questions are excluded from future memory and repetition logic.
-- Past interviews show each session's feedback summary and, when expanded, its questions, answers, scores, strengths, and improvement points.
-
-### Resume and account persistence
-
-- Email/password accounts with 30-day bearer sessions.
-- One persistent PDF resume per account, replaceable at any time.
-- SQLite persistence for accounts, interviews, answers, custom topics, memory, and settings.
-
-### API key settings
-
-- First-time setup asks whether the user already has a key or needs one. The latter path links to Groq's API-key page; both paths test a key before saving it.
-- Returning users see their current interview and transcription connections first, with options to change, test, or remove keys and reopen the guide.
-- The top-left arrow leaves the current key-entry/help step first; from the API settings overview, it returns to the page that opened settings.
-- Interview generation supports Groq, OpenAI, Anthropic, Google Gemini, and Qwen (China and International endpoints). The provider must match the service and region that issued the key. Groq currently uses `openai/gpt-oss-120b`; verification distinguishes rejected keys from model/permission, rate-limit, and connectivity failures. Transcription currently supports Groq and OpenAI, so other interview providers require a second key for spoken answers.
-- Keys are encrypted before local database storage.
-- The complete key is never returned to the browser after saving.
-- A personal key takes precedence over a server fallback key where one is configured.
-- Optional question voice uses Groq's `canopylabs/orpheus-v1-english` TTS model. Long questions are split into its 200-character request limit. On a Groq 429, timeout, network error, or 5xx response, the backend falls back to ElevenLabs `eleven_flash_v2_5` when that account has an ElevenLabs key. Invalid Groq keys do not silently trigger paid backup usage. If neither voice service works, the question remains readable and the interview continues.
-- ElevenLabs is configured separately in API settings and never becomes the interview LLM or transcription provider. Its key is tested with a very short speech sample (using a few credits) and stored encrypted like other provider keys. The ElevenLabs free plan has limited monthly credits and does not include commercial-use rights; check the current plan terms before using it on a commercial site.
-
-## Architecture
-
-```text
-React frontend (localhost:3000)
-        |
-        | Bearer-authenticated JSON / multipart requests
-        v
-FastAPI backend (localhost:8000)
-        |
-        +-- SQLite: users, resumes, interviews, answers, memory, settings
-        +-- FFmpeg: video-to-audio extraction
-        +-- Groq/OpenAI: transcription
-        +-- Selected text provider: questions, scoring, and summaries
-        +-- Groq Orpheus -> ElevenLabs Flash: optional English question speech
+```
+backend/
+  studio.py            API routes
+  intake.py            goal parsing, clarifying questions, role brief
+  engine.py            planning, turns, adaptive difficulty, coaching report
+  memory.py            memory policy and spaced review
+  knowledge.py         roles, levels, rounds, company formats, personas
+  question_seed.py     question bank        coding_problems.py  runnable problems
+  question_refresh.py  weekly trending refresh
+frontend/src/studio/   Home, Intake, Room, CodeWorkspace, Report, Memory, Settings
 ```
 
-Runtime user data is written under `backend/data/`; uploaded recordings are written under `backend/uploads/`. Both directories are ignored by Git.
-
-## Requirements
-
-- Python 3.11 or newer
-- Node.js 18 or newer
-- npm
-- FFmpeg is provided by `imageio-ffmpeg` for video conversion
-- A supported text-provider key and a Groq or OpenAI key for transcription (one Groq or OpenAI key can serve both roles)
-
-## Local setup
+## Run locally
 
 ```bash
-git clone https://github.com/raw012/AI-Interviewer.git
-cd AI-Interviewer
-
-python3 -m venv backend/.venv
-backend/.venv/bin/python -m pip install -r requirements.txt
-
-cd frontend
-npm install
+python3 -m venv backend/.venv && backend/.venv/bin/pip install -r requirements.txt
+cp backend/.env.example backend/.env        # optional server-side keys
+cd backend && .venv/bin/python -m uvicorn main:app --reload --port 8000
 ```
-
-Create `backend/.env`:
-
-```dotenv
-GROQ_API_KEY=
-```
-
-The Groq environment key is optional when users provide their own key through **API settings**. Keep it server-side and out of Git. ElevenLabs fallback requires each user to add their own key in Voice settings, so another user's requests cannot spend a shared ElevenLabs balance.
-
-### Start the backend
-
-From the repository root:
 
 ```bash
-cd backend
-.venv/bin/python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
+cd frontend && npm ci && npm start          # http://localhost:3000
 ```
 
-### Start the frontend
+Each user can connect their own provider key in Settings (Groq has a free tier). Keys are encrypted at rest.
 
-In another terminal:
+Optional environment variables: `GROQ_API_KEY`, `ELEVENLABS_API_KEY`, `GOOGLE_CLIENT_ID` (enables the Google button), `TAVILY_API_KEY` or `BRAVE_API_KEY` (live web search in briefs).
+
+## Test and deploy
 
 ```bash
-cd frontend
-npm start
+STUDIO_NO_REFRESH=1 PYTHONPATH=backend python -m unittest discover -s backend -p 'test_*.py'
+cd frontend && npm run lint && CI=true npm test -- --watchAll=false && npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+`bash scripts/deploy-ieng6.sh` builds the pushed commit, uploads it, backs up code and database, restarts the API and rolls back on failure. Use `DEPLOY_BRANCH=<branch>` to preview a branch. Refresh trending questions weekly with `python backend/question_refresh.py` (the API also refreshes on startup when data is over a week old).
 
-## Production hosting
+## Licence
 
-Build the frontend, then serve the React application and FastAPI API from one
-origin. FastAPI uses `frontend/build` by default; set `FRONTEND_BUILD_DIR` when
-the build is stored elsewhere:
-
-```bash
-cd frontend && npm run build && cd ..
-cd backend
-FRONTEND_BUILD_DIR="$(pwd)/../frontend/build" \
-  .venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000
-```
-
-In production, the frontend sends API requests to its own HTTPS origin. Put that
-origin behind a TLS reverse proxy or a private-origin tunnel; do not expose the
-Uvicorn development server directly to the internet.
-Set `REACT_APP_API_URL` at build time only if the API uses a different origin.
-
-## Verification and CI
-
-Run the frontend checks before deployment:
-
-```bash
-cd frontend
-CI=true npm test -- --watch=false --runInBand
-npm run lint
-npm run build
-```
-
-On the T7 drive, npm removes only verified macOS AppleDouble `._` sidecars before these commands. These files are metadata, not application code; otherwise Jest and ESLint may try to parse them as JavaScript.
-
-Check the backend and run its unit tests:
-
-```bash
-PYTHONPATH=backend python3 -m unittest discover -s backend -p 'test_*.py'
-python3 -m py_compile backend/main.py backend/storage.py backend/evaluator.py backend/providers.py backend/speech.py
-```
-
-The GitHub Actions workflow in `.github/workflows/ci.yml` repeats the frontend and backend checks on pushes and pull requests. A passing GitHub commit is not an automatic production deployment: the ieng6 server currently runs a separate checkout-free copy of the app and must be updated and health-checked separately. Restarts end any interview currently held in backend memory.
-
-### Redeploy to ieng6
-
-After the checks pass and `main` is pushed, run `bash scripts/deploy-ieng6.sh` from the repository root on a machine with access to `raw012@ieng6.ucsd.edu`. The script builds the committed release, uploads it over SSH, backs up the previous code and frontend build on the server, and identifies the process actually listening on port 18000 rather than trusting a possibly stale PID file. It queues the new FastAPI process through the server's `at` service so it survives SSH disconnect, then checks local and public health. It never replaces `backend/data` or `backend/videos`, and leaves the Cloudflare tunnel running. A failed activation restores the previous code and build. This deployment step is deliberately manual; the repository does not contain a GitHub SSH private key or deployment secret.
-
-## Privacy notes
-
-- Do not commit `.env`, API keys, local databases, resumes, or recordings.
-- The local encryption key used for saved provider credentials is stored under `backend/data/` with restricted file permissions.
-- For a hosted deployment, use HTTPS, a managed secret store, production authentication, and a managed database.
-
-## Current limitations
-
-- Active interview sessions are held in backend memory, so restarting the backend ends an in-progress session.
-- The recording-review and profile interfaces are not part of this version's navigation; their existing stored data is not deleted.
+Copyright © 2026 Yirui (Ray) Wang. Source is available under the [PolyForm Noncommercial License 1.0.0](LICENSE): you may read, run and modify it for noncommercial purposes. Commercial use is reserved to the copyright holder.

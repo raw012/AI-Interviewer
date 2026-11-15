@@ -17,3 +17,6 @@ backend/venv/lib/python*/site-packages/_cffi_backend*
 backend/venv/bin/cffi-gen-src
 frontend/node_modules/
 frontend/build/
+
+# Self-hosted voice model (downloaded by scripts/fetch-kokoro.sh)
+backend/models/

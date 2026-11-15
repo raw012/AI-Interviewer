@@ -235,37 +235,53 @@ COMPANIES = {
     "anthropic": {"label": "Anthropic", "aliases": ["anthropic"], "summary": "Practical coding and system design, with a focus on judgment, collaboration and mission alignment.", "values": [], "notes": {}, "sources": []},
 }
 
-# Interviewer personas: look, default voices and conversational style.
+# Interviewer personas: photo, default voices and conversational style.
+# "kokoro" is the self-hosted default; "kokoro_alt" lists other voices that suit the same
+# face (age and gender), so a user can change the voice without it clashing with the photo.
 PERSONAS = {
     "maya": {
         "name": "Maya Chen",
-        "title": "Senior Software Engineer",
+        "title": "Software Engineer",
         "style": "Warm and precise. Gives the candidate room to think, then probes for specifics with calm, curious follow-ups.",
-        "voices": {"groq": "hannah", "elevenlabs": "EXAVITQu4vr4xnSDxMaL", "browser": "female"},
-        "look": {"skin": "#F1C9A5", "skin_shade": "#D9A47E", "hair": "#1F1A1C", "hair_style": "bob", "top": "#3B4A6B", "accent": "#7C8DB5", "glasses": False, "eyes": "#2B2422"},
+        "photo": "personas/maya.jpg",
+        "voices": {"kokoro": "af_sarah", "kokoro_alt": ["af_heart"], "groq": "hannah", "elevenlabs": "EXAVITQu4vr4xnSDxMaL", "browser": "female"},
+        "look": {"skin": "#F1C9A5", "skin_shade": "#D9A47E", "hair": "#1F1A1C", "hair_style": "long", "top": "#1F2230", "accent": "#7C8DB5", "glasses": False, "eyes": "#2B2422"},
     },
     "daniel": {
-        "name": "Daniel Brooks",
+        "name": "Daniel Lin",
         "title": "Engineering Manager",
-        "style": "Friendly, steady and people-focused. Listens closely and asks for concrete examples and what the candidate personally did.",
-        "voices": {"groq": "daniel", "elevenlabs": "JBFqnCBsd6RMkjVDRZzb", "browser": "male"},
-        "look": {"skin": "#8D5A3B", "skin_shade": "#6E4229", "hair": "#141012", "hair_style": "short", "top": "#2F5D50", "accent": "#7FB3A2", "glasses": True, "eyes": "#1E1612"},
+        "style": "Friendly, steady and direct. Listens closely and asks for concrete examples and what the candidate personally did.",
+        "photo": "personas/daniel.jpg",
+        "voices": {"kokoro": "am_liam", "kokoro_alt": ["am_puck"], "groq": "daniel", "elevenlabs": "JBFqnCBsd6RMkjVDRZzb", "browser": "male"},
+        "look": {"skin": "#EBC3A0", "skin_shade": "#CFA07C", "hair": "#141012", "hair_style": "short", "top": "#1C2333", "accent": "#7FB3A2", "glasses": False, "eyes": "#1E1612"},
     },
-    "priya": {
-        "name": "Priya Raman",
+    "grace": {
+        "name": "Grace Liu",
         "title": "Staff Engineer",
         "style": "Direct and rigorous. Pushes on trade-offs, scale and failure modes, the way a bar-raising senior interviewer does.",
-        "voices": {"groq": "diana", "elevenlabs": "9BWtsMINqrJLrRacOk9x", "browser": "female"},
-        "look": {"skin": "#C68E68", "skin_shade": "#A8714E", "hair": "#2A1A14", "hair_style": "long", "top": "#5B3A5E", "accent": "#C89BC2", "glasses": False, "eyes": "#22170F"},
+        "photo": "personas/grace.jpg",
+        "voices": {"kokoro": "af_kore*0.7+zf_xiaoxiao*0.3@0.95", "kokoro_alt": ["af_kore@0.95", "bf_emma@0.95"], "groq": "diana", "elevenlabs": "9BWtsMINqrJLrRacOk9x", "browser": "female"},
+        "look": {"skin": "#E9BE9A", "skin_shade": "#C99B77", "hair": "#1A1416", "hair_style": "long", "top": "#1B1B22", "accent": "#C89BC2", "glasses": True, "eyes": "#22170F"},
     },
-    "alex": {
-        "name": "Alex Morgan",
-        "title": "Product & Data Lead",
-        "style": "Energetic and conversational. Explores user problems, metrics and decisions; comfortable with open-ended cases.",
-        "voices": {"groq": "austin", "elevenlabs": "pNInz6obpgDQGcFmaJgB", "browser": "male"},
-        "look": {"skin": "#E8B990", "skin_shade": "#C99570", "hair": "#8A5A2B", "hair_style": "wavy", "top": "#9A5B2E", "accent": "#E3B07A", "glasses": False, "eyes": "#3A6B8A"},
+    "david": {
+        "name": "David Zhang",
+        "title": "Engineering Director",
+        "style": "Calm and big-picture. Asks about impact, decisions and trade-offs across teams, and how the candidate handles ambiguity.",
+        "photo": "personas/david.jpg",
+        "voices": {"kokoro": "am_michael*0.7+zm_yunjian*0.3@0.95", "kokoro_alt": ["am_michael@0.95", "am_fenrir@0.95"], "groq": "troy", "elevenlabs": "pNInz6obpgDQGcFmaJgB", "browser": "male"},
+        "look": {"skin": "#E3B48E", "skin_shade": "#C2906B", "hair": "#5A5652", "hair_style": "short", "top": "#1D2433", "accent": "#E3B07A", "glasses": True, "eyes": "#2A1E16"},
     },
 }
+
+# Earlier persona keys still found in saved interviews and preferences.
+PERSONA_ALIASES = {"priya": "grace", "alex": "david"}
+
+
+def persona_key(key: str | None) -> str:
+    """Map any stored persona key to a current one, defaulting to Maya."""
+    key = PERSONA_ALIASES.get(key or "", key or "")
+    return key if key in PERSONAS else "maya"
+
 
 PRESSURE_STYLES = {
     "supportive": "Be encouraging. If the candidate is stuck for a while, offer a small nudge. Keep follow-ups gentle.",
@@ -274,6 +290,16 @@ PRESSURE_STYLES = {
 }
 
 VOICES = [
+    {"id": "kokoro:af_sarah", "provider": "kokoro", "voice": "af_sarah", "label": "Sarah", "description": "Clear, professional (female) · on our server", "personas": ["maya"]},
+    {"id": "kokoro:af_heart", "provider": "kokoro", "voice": "af_heart", "label": "Heart", "description": "Warm, natural (female) · on our server", "personas": ["maya"]},
+    {"id": "kokoro:am_liam", "provider": "kokoro", "voice": "am_liam", "label": "Liam", "description": "Young, direct (male) · on our server", "personas": ["daniel"]},
+    {"id": "kokoro:am_puck", "provider": "kokoro", "voice": "am_puck", "label": "Puck", "description": "Young, upbeat (male) · on our server", "personas": ["daniel"]},
+    {"id": "kokoro:af_kore*0.7+zf_xiaoxiao*0.3@0.95", "provider": "kokoro", "voice": "af_kore*0.7+zf_xiaoxiao*0.3@0.95", "label": "Kore, light accent", "description": "Measured, slight accent (female) · on our server", "personas": ["grace"]},
+    {"id": "kokoro:af_kore@0.95", "provider": "kokoro", "voice": "af_kore@0.95", "label": "Kore", "description": "Measured (female) · on our server", "personas": ["grace"]},
+    {"id": "kokoro:bf_emma@0.95", "provider": "kokoro", "voice": "bf_emma@0.95", "label": "Emma", "description": "Crisp British (female) · on our server", "personas": ["grace"]},
+    {"id": "kokoro:am_michael*0.7+zm_yunjian*0.3@0.95", "provider": "kokoro", "voice": "am_michael*0.7+zm_yunjian*0.3@0.95", "label": "Michael, light accent", "description": "Steady, slight accent (male) · on our server", "personas": ["david"]},
+    {"id": "kokoro:am_michael@0.95", "provider": "kokoro", "voice": "am_michael@0.95", "label": "Michael", "description": "Warm, steady (male) · on our server", "personas": ["david"]},
+    {"id": "kokoro:am_fenrir@0.95", "provider": "kokoro", "voice": "am_fenrir@0.95", "label": "Fenrir", "description": "Deep, serious (male) · on our server", "personas": ["david"]},
     {"id": "groq:hannah", "provider": "groq", "voice": "hannah", "label": "Hannah", "description": "Warm, clear (female)"},
     {"id": "groq:diana", "provider": "groq", "voice": "diana", "label": "Diana", "description": "Calm, confident (female)"},
     {"id": "groq:autumn", "provider": "groq", "voice": "autumn", "label": "Autumn", "description": "Bright, friendly (female)"},

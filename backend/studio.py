@@ -12,10 +12,10 @@ from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Respo
 
 from auth_google import client_id as google_client_id
 from auth_google import verify_id_token
-from deps import current_user, optional_voice_key, provider_runtime, server_fallback_available
+from deps import current_user, provider_runtime, server_fallback_available
 from engine import problem_view, remaining_seconds, build_plan, coach_hint, final_report, new_state, opening, retry_answer, take_turn
 from intake import apply_answers, digest_resume, parse_goal, role_brief
-from knowledge import COMPANIES, COMPETENCY_LABELS, LEVELS, PERSONAS, PRESSURE_STYLES, ROLE_FAMILIES, ROUNDS
+from knowledge import COMPANIES, COMPETENCY_LABELS, LEVELS, PERSONAS, PRESSURE_STYLES, ROLE_FAMILIES, ROUNDS, persona_key
 from llm import ModelError
 from memory import add_memory, clear_memory, delete_memory, edit_memory, expire_candidates, focus_competencies, list_memory
 from providers import transcribe_file
@@ -43,7 +43,7 @@ from studio_store import (
     upsert_questions,
     usage_summary,
 )
-from voice import available_voices, resolve_voice, speak
+from voice import available_voices, can_speak, speak
 
 router = APIRouter()
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
@@ -76,7 +76,7 @@ def config() -> dict:
     return {
         "google_client_id": google_client_id(),
         "personas": [
-            {"key": k, "name": v["name"], "title": v["title"], "style": v["style"], "look": v["look"], "voices": v["voices"]}
+            {"key": k, "name": v["name"], "title": v["title"], "style": v["style"], "photo": v["photo"], "look": v["look"], "voices": v["voices"]}
             for k, v in PERSONAS.items()
         ],
         "pressures": [{"key": k, "description": v} for k, v in PRESSURE_STYLES.items()],
@@ -210,9 +210,7 @@ def start(request: dict, user: dict = Depends(current_user)) -> dict:
     if minutes not in ALLOWED_MINUTES:
         raise HTTPException(status_code=400, detail="Choose 15, 30, 45 or 60 minutes")
     prefs = get_profile(user["id"])["prefs"]
-    persona = str(request.get("persona") or prefs.get("persona") or "maya")
-    if persona not in PERSONAS:
-        persona = "maya"
+    persona = persona_key(str(request.get("persona") or prefs.get("persona") or "maya"))
     expire_candidates(user["id"])
     plan = build_plan(user["id"], target, brief, minutes)
     utterance = opening(persona, target, plan, minutes, user.get("name", ""))
@@ -361,8 +359,7 @@ def speak_route(request: dict, user: dict = Depends(current_user)) -> Response:
     text = str(request.get("text", "")).strip()[:2400]
     persona = str(request.get("persona") or "maya")
     voice_pref = str(request.get("voice") or get_profile(user["id"])["prefs"].get("voice", "auto"))
-    provider, _ = resolve_voice(persona, voice_pref)
-    if provider == "browser" or not (optional_voice_key(user["id"], "groq") or optional_voice_key(user["id"], "elevenlabs")):
+    if not can_speak(user["id"], persona, voice_pref):
         raise HTTPException(status_code=424, detail="browser-voice")
     try:
         audio, media_type, used = speak(user["id"], text, persona, voice_pref)

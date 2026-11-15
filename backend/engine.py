@@ -22,7 +22,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from intake import default_loop, digest_resume
-from knowledge import COMPETENCY_LABELS, LEVELS, PERSONAS, PRESSURE_STYLES, ROLE_FAMILIES, ROUNDS, company_info
+from knowledge import COMPETENCY_LABELS, LEVELS, PERSONAS, PRESSURE_STYLES, ROLE_FAMILIES, ROUNDS, company_info, persona_key
 from llm import ModelError, ask_json, clip
 from memory import focus_competencies, memory_brief, record_review, remember, used_story_titles
 from studio_store import (
@@ -214,7 +214,7 @@ def _adapt(plan: list[dict], index: int, recent: list[float], target: dict) -> N
 
 
 def persona_for(key: str) -> dict:
-    return PERSONAS.get(key) or PERSONAS["maya"]
+    return PERSONAS[persona_key(key)]
 
 
 def system_prompt(target: dict, persona_key: str, pressure: str) -> str:

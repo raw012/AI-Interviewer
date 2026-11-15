@@ -65,7 +65,7 @@ class StudioFlowTest(unittest.TestCase):
 
             started = self.client.post("/studio/interviews", json={"target": target, "brief": brief, "minutes": 30, "persona": "priya"}, headers=self.headers).json()
             sid = started["session_id"]
-            self.assertIn("Priya", started["utterance"])
+            self.assertIn("Grace", started["utterance"])  # the old "priya" key maps to Grace
             self.assertGreaterEqual(started["total"], 2)
 
             first = self.client.post(f"/studio/interviews/{sid}/turn", json={"text": "I'm a CS student who built a scheduling app; we shipped it."}, headers=self.headers).json()
